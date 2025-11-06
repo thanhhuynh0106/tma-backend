@@ -17,6 +17,15 @@ const UserSchema = new mongoose.Schema({
     teamId: { type: mongoose.Schema.Types.ObjectId, ref: 'Team', default: null },
     managerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     isActive: { type: Boolean, default: true },
+    leaveBalance: {
+        type: Map,
+        of: {
+            total: { type: Number, default: 12 },
+            used: { type: Number, default: 0 },
+            remaining: { type: Number, default: 12 }
+        },
+        default: {}
+    },
 }, { timestamps: true, collection: 'users' });
 
 

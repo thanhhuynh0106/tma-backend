@@ -2,7 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const connectDB = require('./config/database');
-
+const errorHandler = require('./middleware/errorHandler');
 
 dotenv.config();
 
@@ -47,21 +47,22 @@ app.get('/', (req, res) => {
 });
 
 
-// const authRoutes = require('./routes/auth');
+// Import routes
+const authRoutes = require('./routes/auth');
 // const userRoutes = require('./routes/user');
 // const teamRoutes = require('./routes/team');
 // const taskRoutes = require('./routes/task');
-// const leaveRoutes = require('./routes/leave');
+const leaveRoutes = require('./routes/leave');
 // const attendanceRoutes = require('./routes/attendance');
 // const notificationRoutes = require('./routes/notification');
 // const messageRoutes = require('./routes/message');
 
-
-// app.use('/api/auth', authRoutes);
+// Mount routes
+app.use('/api/auth', authRoutes);
 // app.use('/api/users', userRoutes);
 // app.use('/api/teams', teamRoutes);
 // app.use('/api/tasks', taskRoutes);
-// app.use('/api/leaves', leaveRoutes);
+app.use('/api/leaves', leaveRoutes);
 // app.use('/api/attendance', attendanceRoutes);
 // app.use('/api/notifications', notificationRoutes);
 // app.use('/api/messages', messageRoutes);
@@ -74,7 +75,7 @@ app.use((req, res, next) => {
     });
 });
 
-
+app.use(errorHandler);
 
 
 const PORT = process.env.PORT;
