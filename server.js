@@ -53,7 +53,7 @@ const authRoutes = require('./routes/auth');
 // const teamRoutes = require('./routes/team');
 // const taskRoutes = require('./routes/task');
 const leaveRoutes = require('./routes/leave');
-// const attendanceRoutes = require('./routes/attendance');
+const attendanceRoutes = require('./routes/attendance');
 // const notificationRoutes = require('./routes/notification');
 // const messageRoutes = require('./routes/message');
 
@@ -63,7 +63,7 @@ app.use('/api/auth', authRoutes);
 // app.use('/api/teams', teamRoutes);
 // app.use('/api/tasks', taskRoutes);
 app.use('/api/leaves', leaveRoutes);
-// app.use('/api/attendance', attendanceRoutes);
+app.use('/api/attendance', attendanceRoutes);
 // app.use('/api/notifications', notificationRoutes);
 // app.use('/api/messages', messageRoutes);
 
