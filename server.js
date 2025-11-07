@@ -55,7 +55,7 @@ const authRoutes = require('./routes/auth');
 const leaveRoutes = require('./routes/leave');
 const attendanceRoutes = require('./routes/attendance');
 // const notificationRoutes = require('./routes/notification');
-// const messageRoutes = require('./routes/message');
+const messageRoutes = require('./routes/message');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
@@ -65,7 +65,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/attendance', attendanceRoutes);
 // app.use('/api/notifications', notificationRoutes);
-// app.use('/api/messages', messageRoutes);
+app.use('/api/messages', messageRoutes);
 
 
 app.use((req, res, next) => {
