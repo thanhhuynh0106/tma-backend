@@ -2,6 +2,7 @@ const User = require("../models/User");
 const Team = require("../models/Team");
 const { hashPassword } = require("../services/authService");
 const { sendTokenResponse } = require("../config/jwt");
+const { comparePassword } = require("../services/authService");
 
 /**
  * @desc    Register user & get token
@@ -68,7 +69,6 @@ const login = async (req, res) => {
       });
     }
 
-    const { comparePassword } = require("../services/authService");
     const isMatch = await comparePassword(password, user.password);
 
     if (!isMatch) {
@@ -86,6 +86,40 @@ const login = async (req, res) => {
     }
 
     sendTokenResponse(user, 200, res);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * @desc    Change user password
+ * @route   PUT /api/auth/password
+ * @access  Private
+ */
+
+const changePassword = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { oldPassword, newPassword } = req.body;
+    const user = await User.findById(userId).select("+password");
+    const isMatch = await comparePassword(oldPassword, user.password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: "Old password is incorrect",
+      });
+    }
+
+    user.password = await hashPassword(newPassword);
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully",
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -158,6 +192,7 @@ const updateProfile = async (req, res) => {
 module.exports = {
   register,
   login,
+  changePassword,
   getMe,
   updateProfile,
 };
