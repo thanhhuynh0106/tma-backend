@@ -49,7 +49,7 @@ app.get('/', (req, res) => {
 
 // Import routes
 const authRoutes = require('./routes/auth');
-// const userRoutes = require('./routes/user');
+const userRoutes = require('./routes/user');
 // const teamRoutes = require('./routes/team');
 // const taskRoutes = require('./routes/task');
 const leaveRoutes = require('./routes/leave');
@@ -59,7 +59,7 @@ const messageRoutes = require('./routes/message');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
-// app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);
 // app.use('/api/teams', teamRoutes);
 // app.use('/api/tasks', taskRoutes);
 app.use('/api/leaves', leaveRoutes);
