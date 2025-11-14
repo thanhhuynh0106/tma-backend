@@ -650,7 +650,8 @@ const addAttachment = async (req, res) => {
     // Add attachment to task
     task.attachments.push({
       name: req.file.originalname,
-      url: getFileUrl(req.file.filename),
+      url: req.file.path,  // Cloudinary trả về .path = URL
+      public_id: req.file.filename,  // Lưu để xóa sau     
       type: req.file.mimetype
     });
 
@@ -693,7 +694,10 @@ const addAttachmentBulk = async (req, res) => {
 
     const task = await Task.findById(req.params.id);
     if (!task || task.status === 'deleted') {
-      req.files.forEach(file => deleteFile(file.filename));
+      // XÓA TẤT CẢ TRÊN CLOUDINARY
+      for (const file of req.files) {
+        await deleteFile(file.filename);
+      }
       return res.status(404).json({
         success: false,
         error: 'Task not found'
@@ -701,16 +705,20 @@ const addAttachmentBulk = async (req, res) => {
     }
 
     if (!canUserAccessTask(req.user, task)) {
-      req.files.forEach(file => deleteFile(file.filename));
+      for (const file of req.files) {
+        await deleteFile(file.filename);
+      }
       return res.status(403).json({
         success: false,
         error: 'Not authorized'
       });
     }
 
+    // SỬA LỖI: DÙNG file, KHÔNG PHẢI req.file
     const attachments = req.files.map(file => ({
       name: file.originalname,
-      url: getFileUrl(file.filename),
+      url: file.path,               // URL từ Cloudinary
+      public_id: file.filename,     // public_id
       type: file.mimetype
     }));
 
@@ -722,14 +730,15 @@ const addAttachmentBulk = async (req, res) => {
       message: 'Files uploaded successfully',
       data: attachments.map((att, index) => ({
         ...att,
-        size: req.files[index].size
+        size: req.files[index].bytes  // DÙNG .bytes, KHÔNG PHẢI .size
       }))
     });
   } catch (error) {
     if (req.files) {
-      req.files.forEach(file => deleteFile(file.filename));
+      for (const file of req.files) {
+        await deleteFile(file.filename);
+      }
     }
-
     console.error('Add attachment bulk error:', error);
     res.status(500).json({
       success: false,

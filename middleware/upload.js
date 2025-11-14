@@ -1,31 +1,31 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { v2: cloudinary } = require('cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Create uploads directory if it doesn't exist
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Store files in uploads folder
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: timestamp-userid-originalname
-    const uniqueSuffix = Date.now() + '-' + req.user._id;
-    const ext = path.extname(file.originalname);
-    const name = path.basename(file.originalname, ext);
-    cb(null, name + '-' + uniqueSuffix + ext);
-  }
+// Cấu hình Cloudinary từ .env
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// File filter - allow only specific file types
+// === STORAGE: UPLOAD TRỰC TIẾP LÊN CLOUDINARY ===
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'tma-tasks', // Thư mục trên Cloudinary
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
+    resource_type: 'auto',
+    public_id: (req, file) => {
+      const ext = file.originalname.split('.').pop();
+      const name = file.originalname.replace(`.${ext}`, '');
+      return `${name}-${Date.now()}-${req.user._id}`;
+    },
+  },
+});
+
+// === FILE FILTER: GIỮ NGUYÊN NHƯ CŨ ===
 const fileFilter = (req, file, cb) => {
-  // Allowed MIME types
   const allowedMimes = [
     'application/pdf',
     'application/msword',
@@ -39,35 +39,32 @@ const fileFilter = (req, file, cb) => {
     'text/plain'
   ];
 
-  // Allowed extensions
   const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt'];
 
-  const ext = path.extname(file.originalname).toLowerCase();
+  const ext = '.' + file.originalname.split('.').pop().toLowerCase();
   const mime = file.mimetype;
 
   if (allowedExtensions.includes(ext) && allowedMimes.includes(mime)) {
     cb(null, true);
   } else {
-    cb(new Error(`File type not allowed. Allowed types: ${allowedExtensions.join(', ')}`), false);
+    cb(new Error(`File type not allowed. Allowed: ${allowedExtensions.join(', ')}`), false);
   }
 };
 
-// Create multer instance
+// === MULTER INSTANCE ===
 const upload = multer({
-  storage: storage,
+  storage: storage,        // UPLOAD LÊN CLOUDINARY
   fileFilter: fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB limit
+    fileSize: 5 * 1024 * 1024 // 5MB
   }
 });
 
-// Middleware to handle single file upload
-const uploadSingle = upload.single('file');
+// === MIDDLEWARE: GIỮ NGUYÊN TÊN FIELD ===
+const uploadSingle = upload.single('attachment');     // Dùng trong addAttachment
+const uploadMultiple = upload.array('attachments', 5); // Dùng trong addAttachmentBulk
 
-// Middleware to handle multiple files upload
-const uploadMultiple = upload.array('files', 5); // Max 5 files
-
-// Error handling middleware for upload
+// === ERROR HANDLER: GIỮ NGUYÊN ===
 const uploadErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -94,30 +91,32 @@ const uploadErrorHandler = (err, req, res, next) => {
   next();
 };
 
-// Helper function to get file URL
-const getFileUrl = (filename) => {
-  return `/uploads/${filename}`;
+// === HELPER: LẤY URL TỪ CLOUDINARY ===
+const getFileUrl = (file) => {
+  return file.path; // Cloudinary trả về .path = URL công khai
 };
 
-// Helper function to delete file
-const deleteFile = (filename) => {
+// === HELPER: XÓA FILE TRÊN CLOUDINARY ===
+const deleteFile = async (publicId) => {
   try {
-    const filepath = path.join(uploadsDir, filename);
-    if (fs.existsSync(filepath)) {
-      fs.unlinkSync(filepath);
-      return true;
-    }
-    return false;
+    if (!publicId) return false;
+    const result = await cloudinary.uploader.destroy(publicId);
+    return result.result === 'ok';
   } catch (error) {
-    console.error('Error deleting file:', error);
+    console.error('Cloudinary delete error:', error);
     return false;
   }
 };
 
-// Middleware to validate file exists
-const validateFileExists = (filename) => {
-  const filepath = path.join(uploadsDir, filename);
-  return fs.existsSync(filepath);
+// === VALIDATE FILE TRÊN CLOUDINARY (TÙY CHỌN) ===
+const validateFileExists = async (publicId) => {
+  try {
+    if (!publicId) return false;
+    const result = await cloudinary.api.resource(publicId);
+    return !!result;
+  } catch (error) {
+    return false;
+  }
 };
 
 module.exports = {
@@ -126,5 +125,6 @@ module.exports = {
   uploadErrorHandler,
   getFileUrl,
   deleteFile,
-  validateFileExists
+  validateFileExists,
+  cloudinary // export để dùng xóa ở controller
 };
