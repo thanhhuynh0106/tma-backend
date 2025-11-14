@@ -12,9 +12,9 @@ const CommentSchema = new mongoose.Schema({
 }, { _id: false });
 
 const TaskSchema = new mongoose.Schema({
-    title: { type: String, required: true, trim: true },
+    title: { type: String, required: true, trim: true, unique: true },
     description: { type: String, default: '' },
-    status: { type: String, enum: ['todo', 'in_progress', 'done'], default: 'todo' },
+    status: { type: String, enum: ['todo', 'in_progress', 'done', 'deleted'], default: 'todo' },
     priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     assignedTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
