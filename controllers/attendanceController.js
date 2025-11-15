@@ -120,11 +120,17 @@ const getMyAttendance = async (req, res) => {
         const userId = req.user._id;
         const { startDate, endDate } = req.query;
         const query = { userId };
+        
         if (startDate && endDate) {
-            query.date = {
-                $gte: new Date(startDate),  
-                $lte: new Date(endDate)     
-            };
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                query.date = {
+                    $gte: start,  
+                    $lte: end     
+                };
+            }
         }
 
         const records = await Attendance.find(query).sort({ date: -1 });
@@ -186,12 +192,19 @@ const getAllAttendance = async (req, res) => {
     try {
         const { startDate, endDate, page = 1, limit = 20 } = req.query;
         const query = {};
+        
         if (startDate && endDate) {
-            query.date = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                query.date = {
+                    $gte: start,
+                    $lte: end
+                };
+            }
         }
+        
         const records = await Attendance.find(query)
             .skip((page - 1) * limit)
             .limit(parseInt(limit))
@@ -231,10 +244,15 @@ const getTeamAttendance = async (req, res) => {
         };
 
         if (startDate && endDate) {
-            query.date = {
-                $gte: new Date(startDate),
-                $lte: new Date(endDate)
-            };
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+                query.date = {
+                    $gte: start,
+                    $lte: end
+                };
+            }
         }
 
         const records = await Attendance.find(query).sort({ date: -1 }).populate('userId', 'name email');
