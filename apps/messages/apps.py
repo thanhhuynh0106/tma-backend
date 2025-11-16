@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class MessagesConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'apps.messages'
+    label = 'app_messages'  # Đổi label để tránh conflict với django.contrib.messages
