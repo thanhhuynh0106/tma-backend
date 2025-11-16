@@ -26,7 +26,7 @@ const determineStatus = (clockInTime) => {
     const inTime = new Date(clockInTime);
     const standardStart = new Date(inTime);
     standardStart.setHours(9, 0, 0, 0); // 9:00 AM
-    return inTime <= standardStart ? 'on_time' : 'late';    
+    return inTime <= standardStart ? 'present' : 'late';    
 }
 
 
@@ -55,23 +55,35 @@ const getTodayAttendance = async (userId) => {
  * @returns {Object}
  */
 const getAttendanceStats = async (userId, startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const records = await Attendance.find({
-        userId,
-        date: { $gte: start, $lte: end }
-    });
+    const query = { userId };
+    
+    // Only add date filter if dates are provided and valid
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+            query.date = { $gte: start, $lte: end };
+        }
+    }
+    
+    const records = await Attendance.find(query);
 
     const totalDays = records.length;
     const presentDays = records.filter(r => r.status === 'present').length;
     const lateDays = records.filter(r => r.status === 'late').length;
     const absentDays = records.filter(r => r.status === 'absent').length;
+    
+    const totalWorkHours = records.reduce((sum, r) => sum + (r.workHours || 0), 0);
+    const averageWorkHours = totalDays > 0 ? totalWorkHours / totalDays : 0;
 
     return {
         totalDays,
         presentDays,
         lateDays,
-        absentDays
+        absentDays,
+        totalWorkHours: parseFloat(totalWorkHours.toFixed(2)),
+        averageWorkHours: parseFloat(averageWorkHours.toFixed(2))
     };
 }
 
