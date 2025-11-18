@@ -3,14 +3,35 @@ Django base settings for server project.
 """
 import os
 from pathlib import Path
-from decouple import config
+
 import mongoengine
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
+# Helper function thay thế decouple.config
+def get_env(key, default=None, cast=None):
+    """
+    Get environment variable với hỗ trợ cast type.
+    Tương tự như decouple.config() nhưng đơn giản hơn.
+    """
+    value = os.getenv(key, default)
+    
+    if value is None:
+        return None
+    
+    # Nếu có cast function, apply nó
+    if cast is not None:
+        try:
+            return cast(value)
+        except (ValueError, TypeError):
+            return default
+    
+    return value
+
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-this-in-production')
+SECRET_KEY = get_env('SECRET_KEY', 'django-insecure-change-this-in-production')
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -70,10 +91,12 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'server.wsgi.application'
 
-MONGODB_URI = config(
+MONGODB_URI = get_env(
     'MONGODB_URI',
     default='mongodb+srv://final_project_db:final_project_db_password@project.caqq85p.mongodb.net/final_project_db?retryWrites=true&w=majority'
 )
+
+
 
 try:
     mongoengine.connect(
@@ -117,7 +140,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.authentication.backends.MongoJWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -136,13 +159,13 @@ REST_FRAMEWORK = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=config('ACCESS_TOKEN_LIFETIME', default=15, cast=int)),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=config('REFRESH_TOKEN_LIFETIME', default=7, cast=int)),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=get_env('ACCESS_TOKEN_LIFETIME', default=15, cast=int)),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=get_env('REFRESH_TOKEN_LIFETIME', default=7, cast=int)),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
-    'ALGORITHM': config('JWT_ALGORITHM', default='HS256'),
-    'SIGNING_KEY': config('JWT_SECRET_KEY', default=SECRET_KEY),
+    'ALGORITHM': get_env('JWT_ALGORITHM', default='HS256'),
+    'SIGNING_KEY': get_env('JWT_SECRET_KEY', default=SECRET_KEY),
     'AUTH_HEADER_TYPES': ('Bearer',),
     'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
     'USER_ID_FIELD': 'id',

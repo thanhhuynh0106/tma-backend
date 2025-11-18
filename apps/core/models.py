@@ -13,4 +13,4 @@ class BaseDocument(Document):
 
     def save(self, *args, **kwargs):
         self.updated_at = datetime.utcnow()
-        return super(BaseDocument, self).save(*args, **kwargs)
+        return super().save(*args, **kwargs)
