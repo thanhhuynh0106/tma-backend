@@ -9,9 +9,6 @@ from apps.core.exceptions import NotFoundError, ValidationError, ConflictError
 
 
 class AttendanceService:
-    """Business logic cho Attendance (check-in / check-out)."""
-
-    # Phạm vi cho phép clock in
     ALLOWED_AREA = {
         "latMin": 10.869093,
         "latMax": 10.871556,
@@ -19,8 +16,7 @@ class AttendanceService:
         "lngMax": 106.805138,
     }
 
-    # Thời gian absent (8h sáng)
-    ABSENT_TIME = time(8, 0, 0)  # 8:00 AM
+    ABSENT_TIME = time(8, 0, 0)
 
     @staticmethod
     def _get_user(user_id: str) -> User:
@@ -36,10 +32,6 @@ class AttendanceService:
 
     @staticmethod
     def _validate_location(location: dict) -> None:
-        """
-        Validate location có nằm trong phạm vi cho phép không.
-        Raises ValidationError nếu location không hợp lệ.
-        """
         if not location or "lat" not in location or "lng" not in location:
             raise ValidationError("Location must contain 'lat' and 'lng'")
 
@@ -60,11 +52,6 @@ class AttendanceService:
 
     @staticmethod
     def _determine_status(clock_in_time: datetime) -> str:
-        """
-        Xác định status dựa trên thời gian clock in.
-        - Trước hoặc đúng 8h sáng: "present"
-        - Sau 8h sáng: "late"
-        """
         clock_in_time_only = clock_in_time.time()
         
         if clock_in_time_only <= AttendanceService.ABSENT_TIME:
@@ -78,7 +65,6 @@ class AttendanceService:
         if AttendanceService._get_today_attendance(user):
             raise ConflictError("User already clocked in today")
 
-        # Validate location trước khi clock in
         AttendanceService._validate_location(location)
 
         clock_in_time = datetime.utcnow()

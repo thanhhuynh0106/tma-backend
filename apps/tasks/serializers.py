@@ -20,7 +20,6 @@ class CommentSerializer(serializers.EmbeddedDocumentSerializer):
         read_only_fields = ('created_at', 'user_id')
     
     def get_user_id(self, obj):
-        """Return user id as string"""
         if obj.user:
             return str(obj.user.id)
         return None
@@ -51,7 +50,6 @@ class TaskSerializer(serializers.DocumentSerializer):
         read_only_fields = ('id', 'assigned_by')
 
     def to_internal_value(self, data):
-        # Map assigned_to thành assigned_to_ids nếu có
         if isinstance(data, dict):
             if 'assigned_to' in data and 'assigned_to_ids' not in data:
                 data = data.copy()
@@ -59,11 +57,9 @@ class TaskSerializer(serializers.DocumentSerializer):
                 if assigned_to_value:
                     data['assigned_to_ids'] = assigned_to_value
         elif hasattr(data, 'get'):
-            # QueryDict hoặc tương tự
             if 'assigned_to' in data and 'assigned_to_ids' not in data:
                 assigned_to_value = data.get('assigned_to', [])
                 if assigned_to_value:
-                    # Tạo dict mới với assigned_to_ids
                     new_data = {}
                     for key in data:
                         if key == 'assigned_to':
@@ -76,32 +72,26 @@ class TaskSerializer(serializers.DocumentSerializer):
     def create(self, validated_data):
         attachments_data = validated_data.pop('attachments', [])
         comments_data = validated_data.pop('comments', [])
-        
-        # Xử lý assigned_by_id
+
         assigned_by_id = validated_data.pop('assigned_by_id', None)
         if assigned_by_id:
             assigned_by = User.objects.get(id=assigned_by_id)
             validated_data['assigned_by'] = assigned_by
         elif self.context.get('request') and hasattr(self.context['request'], 'user'):
-            # Nếu không có assigned_by_id, dùng request.user
             validated_data['assigned_by'] = self.context['request'].user
         else:
             raise serializers.ValidationError({'assigned_by_id': 'assigned_by_id is required or user must be authenticated'})
         
-        # Xử lý assigned_to_ids (đã được map từ assigned_to trong to_internal_value nếu có)
         assigned_to_ids = validated_data.pop('assigned_to_ids', None)
         
-        # Kiểm tra xem có được truyền vào không (trong initial_data)
         was_provided = 'assigned_to_ids' in self.initial_data or 'assigned_to' in self.initial_data
         
-        # Nếu không có trong validated_data nhưng có trong initial_data, lấy từ đó
         if not assigned_to_ids and was_provided:
             if 'assigned_to' in self.initial_data:
                 assigned_to_ids = self.initial_data.get('assigned_to', [])
             elif 'assigned_to_ids' in self.initial_data:
                 assigned_to_ids = self.initial_data.get('assigned_to_ids', [])
         
-        # Chỉ xử lý nếu assigned_to_ids thực sự có giá trị
         if assigned_to_ids and len(assigned_to_ids) > 0:
             assigned_to = []
             for uid in assigned_to_ids:
@@ -111,7 +101,6 @@ class TaskSerializer(serializers.DocumentSerializer):
                 except User.DoesNotExist:
                     raise serializers.ValidationError({'assigned_to': f'User with id {uid} not found'})
             validated_data['assigned_to'] = assigned_to
-        # Nếu không có assigned_to_ids hoặc là empty list, không set (để model dùng default)
 
         task = Task.objects.create(**validated_data)
 
@@ -131,13 +120,11 @@ class TaskSerializer(serializers.DocumentSerializer):
         attachments_data = validated_data.pop('attachments', None)
         comments_data = validated_data.pop('comments', None)
         
-        # Xử lý assigned_by_id nếu có
         assigned_by_id = validated_data.pop('assigned_by_id', None)
         if assigned_by_id:
             assigned_by = User.objects.get(id=assigned_by_id)
             instance.assigned_by = assigned_by
         
-        # Xử lý assigned_to_ids (đã được map từ assigned_to trong to_internal_value nếu có)
         assigned_to_ids = validated_data.pop('assigned_to_ids', None)
         
         if assigned_to_ids is not None:

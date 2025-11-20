@@ -39,7 +39,6 @@ class TaskListView(APIView):
         })
 
     def post(self, request):
-        # Chuẩn hóa request.data: map assigned_to thành assigned_to_ids nếu có
         data = dict(request.data)
         if 'assigned_to' in data and 'assigned_to_ids' not in data:
             assigned_to_value = data.pop('assigned_to', [])

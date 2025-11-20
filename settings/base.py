@@ -1,26 +1,19 @@
-"""
-Django base settings for server project.
-"""
 import os
 from pathlib import Path
 
 import mongoengine
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Helper function thay thế decouple.config
+
 def get_env(key, default=None, cast=None):
-    """
-    Get environment variable với hỗ trợ cast type.
-    Tương tự như decouple.config() nhưng đơn giản hơn.
-    """
+
     value = os.getenv(key, default)
     
     if value is None:
         return None
     
-    # Nếu có cast function, apply nó
     if cast is not None:
         try:
             return cast(value)
@@ -29,11 +22,9 @@ def get_env(key, default=None, cast=None):
     
     return value
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = get_env('SECRET_KEY', 'django-insecure-change-this-in-production')
 
 
-# Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -42,12 +33,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    # Third-party packages
     'rest_framework',
     'corsheaders',
     'rest_framework_simplejwt',
     
-    # Custom apps
     'apps.core',
     'apps.authentication',
     'apps.users',
@@ -107,7 +96,7 @@ except Exception as e:
     print(f"MongoDB connection error: {e}")
     raise
 
-# Password validation
+
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -123,13 +112,12 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files
+
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = 'media/'
@@ -137,7 +125,6 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Django REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'apps.authentication.backends.MongoJWTAuthentication',
@@ -155,11 +142,11 @@ REST_FRAMEWORK = {
     ],
 }
 
-# JWT Configuration
+
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=get_env('ACCESS_TOKEN_LIFETIME', default=15, cast=int)),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=get_env('ACCESS_TOKEN_LIFETIME', default=1440, cast=int)),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=get_env('REFRESH_TOKEN_LIFETIME', default=7, cast=int)),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
@@ -174,10 +161,11 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
 
-# CORS Configuration
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -203,12 +191,11 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# Security Settings
+
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
-# Logging
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,

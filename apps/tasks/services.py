@@ -9,7 +9,6 @@ from apps.core.exceptions import NotFoundError, ValidationError
 
 
 class TaskService:
-    """Business logic cho Task."""
 
     @staticmethod
     def _get_task(task_id: str) -> Task:
@@ -99,7 +98,8 @@ class TaskService:
         task = TaskService._get_task(task_id)
         task.delete()
 
-    # --------- Extra actions ---------
+
+
     @staticmethod
     def change_status(task_id: str, status_value: str) -> Task:
         task = TaskService._get_task(task_id)

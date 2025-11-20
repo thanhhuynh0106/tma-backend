@@ -8,8 +8,6 @@ from apps.core.exceptions import NotFoundError
 
 
 class NotificationService:
-    """Business logic cho Notification."""
-
     @staticmethod
     def _get_user(user_id: str) -> User:
         user = User.objects(id=user_id).first()
