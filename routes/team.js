@@ -9,6 +9,8 @@ const {
   addMember,
   removeMember,
   assignTeamLead,
+  getTeamMembers,
+  getAllMembers
 } = require("../controllers/teamController");
 const { protect, authorize } = require("../middleware/auth");
 const { USER_ROLES } = require("../utils/constants");
@@ -38,6 +40,20 @@ router.put(
   protect,
   authorize(USER_ROLES.HR_MANAGER),
   assignTeamLead
+);
+
+router.get(
+  "/:id/members",
+  protect,
+  authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
+  getTeamMembers
+);
+
+router.get(
+  "/members",
+  protect,
+  authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
+  getAllMembers
 );
 
 module.exports = router;

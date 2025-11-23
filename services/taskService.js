@@ -94,7 +94,7 @@ const canUserAccessTask = (user, task) => {
  * @returns {Boolean}
  */
 const canCreateOrAssignTask = (user) => {
-  return ['hr_manager', 'team_lead'].includes(user.role);
+  return user.role === 'hr_manager' || user.role === 'team_lead';
 };
 
 /**

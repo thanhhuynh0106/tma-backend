@@ -85,7 +85,11 @@ const notifyTaskAssigned = async (task, userId) => {
 const notifyTaskUpdated = async (task, updaterId) => {
   try {
     const title = 'Task Updated';
-    const message = `Task "${task.title}" has been updated`;
+    
+    // Tạo message chi tiết hơn
+    const user = await User.findById(updaterId).select('profile.fullName'); 
+    const updaterName = user?.profile?.fullName || 'A user';
+    const message = `Task "${task.title}" was updated by ${updaterName}. Priority: ${task.priority.toUpperCase()}, Status: ${task.status.toUpperCase()}`;
 
     // Notify all assigned users except the updater
     const userIds = task.assignedTo
