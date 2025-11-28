@@ -107,7 +107,7 @@ const changePassword = async (req, res) => {
     const user = await User.findById(userId).select("+password");
     const isMatch = await comparePassword(oldPassword, user.password);
     if (!isMatch) {
-      return res.status(401).json({
+      return res.status(400).json({
         success: false,
         error: "Old password is incorrect",
       });
@@ -196,4 +196,3 @@ module.exports = {
   getMe,
   updateProfile,
 };
-
