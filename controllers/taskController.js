@@ -14,7 +14,7 @@ const {
   notifyTaskUpdated,
   notifyCommentAdded
 } = require('../services/notificationService');
-const { getFileUrl, deleteFile } = require('../middleware/upload');
+const { getFileUrl, deleteFile, getOriginalFilename } = require('../middleware/upload');
 
 
 /**
@@ -649,10 +649,10 @@ const addAttachment = async (req, res) => {
 
     // Add attachment to task
     task.attachments.push({
-      name: req.file.originalname,
-      url: req.file.path,  // Cloudinary trả về .path = URL
-      public_id: req.file.filename,  // Lưu để xóa sau     
-      type: req.file.mimetype
+      name: getOriginalFilename(req.file.filename), // Tên đẹp: "Báo cáo tháng 10.pdf"
+      url: req.file.path,
+      public_id: req.file.filename,                 // Dùng để xóa sau
+      type: req.file.mimetype,
     });
 
     await task.save();

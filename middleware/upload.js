@@ -2,101 +2,139 @@ const multer = require('multer');
 const { v2: cloudinary } = require('cloudinary');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
-// Cấu hình Cloudinary từ .env
+// === DANH SÁCH ĐUÔI FILE BỊ CẤM (MÃ ĐỘC, MACRO, EXECUTABLE...) ===
+const BLOCKED_EXTENSIONS = [
+  'exe', 'scr', 'com', 'bat', 'cmd', 'ps1', 'vbs', 'vbe', 'js', 'jse',
+  'wsf', 'wsh', 'msc', 'msp', 'mst', 'pif', 'application', 'gadget',
+  'hta', 'lnk', 'inf', 'reg', 'cpl', 'sh', 'bash', 'zsh', 'ksh', 'csh',
+  'apk', 'deb', 'rpm', 'app', 'run', 'command',
+  'dll', 'so', 'dylib', 'jar', 'class',
+  'docm', 'dotm', 'xlsm', 'xltm', 'xlam', 'pptm', 'potm', 'ppam', 'sldm',
+  'iso', 'img', 'dmg', 'msi', 'msp', 'msu', 'cab', 'swf', 'air'
+];
+
+const isExtensionBlocked = (filename) => {
+  if (!filename) return false;
+  const ext = filename.toLowerCase().split('.').pop();
+  return BLOCKED_EXTENSIONS.includes(ext);
+};
+
+// === TẠO TÊN FILE DUY NHẤT NHƯNG GIỮ NGUYÊN TÊN GỐC ĐỂ HIỂN THỊ ===
+const generateUniquePublicId = (originalname, userId) => {
+  const ext = originalname.split('.').pop();
+  const originalWithoutExt = originalname.slice(0, -(ext.length + 1)).trim();
+
+  // Tạo prefix duy nhất để tránh trùng
+  const uniquePrefix = `${userId}-${Date.now()}-${Math.round(Math.random() * 1E9)}`;
+
+  // Kết quả: user123-1735928340000-987654321--Báo cáo tháng 10.pdf
+  return `${uniquePrefix}--${originalWithoutExt}`;
+};
+
+// === LẤY LẠI TÊN GỐC ĐỂ LƯU VÀO DATABASE ===
+const getOriginalFilename = (publicId) => {
+  if (!publicId) return 'unknown-file';
+  const parts = publicId.split('--');
+  if (parts.length >= 2) {
+    const rest = parts.slice(1).join('--');
+    const lastDotIndex = rest.lastIndexOf('.');
+    if (lastDotIndex > 0) {
+      return rest;
+    }
+  }
+  return publicId + '.file'; // fallback
+};
+
+// Cấu hình Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// === STORAGE: UPLOAD TRỰC TIẾP LÊN CLOUDINARY ===
+// === STORAGE: KHÔNG DÙNG allowed_formats → TRÁNH LỖI ===
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: {
-    folder: 'tma-tasks', // Thư mục trên Cloudinary
-    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'],
-    resource_type: 'auto',
-    public_id: (req, file) => {
-      const ext = file.originalname.split('.').pop();
-      const name = file.originalname.replace(`.${ext}`, '');
-      return `${name}-${Date.now()}-${req.user._id}`;
-    },
+  params: (req, file) => {
+    if (isExtensionBlocked(file.originalname)) {
+      throw new Error(`File bị chặn vì lý do bảo mật: .${file.originalname.split('.').pop()}`);
+    }
+
+    const publicId = generateUniquePublicId(file.originalname, req.user._id);
+
+    return {
+      folder: 'tma-tasks',
+      resource_type: 'auto',
+      public_id: publicId,
+    };
   },
 });
 
-// === FILE FILTER: GIỮ NGUYÊN NHƯ CŨ ===
+// === FILE FILTER: CHẶN TRƯỚC KHI UPLOAD ===
 const fileFilter = (req, file, cb) => {
+  if (isExtensionBlocked(file.originalname)) {
+    return cb(new Error(`Không được phép upload file có đuôi ".${file.originalname.split('.').pop()}" vì lý do bảo mật`), false);
+  }
+
   const allowedMimes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'text/plain'
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain', 'text/csv',
+    'application/zip', 'application/x-zip-compressed',
+    'application/vnd.rar'
   ];
 
-  const allowedExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.txt'];
-
-  const ext = '.' + file.originalname.split('.').pop().toLowerCase();
-  const mime = file.mimetype;
-
-  if (allowedExtensions.includes(ext) && allowedMimes.includes(mime)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`File type not allowed. Allowed: ${allowedExtensions.join(', ')}`), false);
+  if (!allowedMimes.includes(file.mimetype)) {
+    return cb(new Error('Only allowed PDF, Word, Excel, PowerPoint, TXT, CSV, ZIP'), false);
   }
+
+  cb(null, true);
 };
 
 // === MULTER INSTANCE ===
 const upload = multer({
-  storage: storage,        // UPLOAD LÊN CLOUDINARY
-  fileFilter: fileFilter,
+  storage,
+  fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024 // 5MB
-  }
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
 });
 
-// === MIDDLEWARE: GIỮ NGUYÊN TÊN FIELD ===
-const uploadSingle = upload.single('attachment');     // Dùng trong addAttachment
-const uploadMultiple = upload.array('attachments', 5); // Dùng trong addAttachmentBulk
+const uploadSingle = upload.single('attachment');
+const uploadMultiple = upload.array('attachments', 5);
 
-// === ERROR HANDLER: GIỮ NGUYÊN ===
+// === XỬ LÝ LỖI ĐẸP ===
 const uploadErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({
-        success: false,
-        error: 'File size exceeds 5MB limit'
-      });
+      return res.status(400).json({ success: false, error: 'File quá lớn. Tối đa 10MB' });
     }
     if (err.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({
-        success: false,
-        error: 'Maximum 5 files allowed'
-      });
+      return res.status(400).json({ success: false, error: 'Tối đa 5 file mỗi lần upload' });
     }
   }
 
   if (err) {
     return res.status(400).json({
       success: false,
-      error: err.message
+      error: err.message || 'Upload thất bại'
     });
   }
 
   next();
 };
 
-// === HELPER: LẤY URL TỪ CLOUDINARY ===
-const getFileUrl = (file) => {
-  return file.path; // Cloudinary trả về .path = URL công khai
-};
+// === HELPER: LẤY TÊN GỐC ĐỂ LƯU DATABASE ===
+const getFileUrl = (file) => file.path;
 
-// === HELPER: XÓA FILE TRÊN CLOUDINARY ===
+
+// === XÓA FILE ===
 const deleteFile = async (publicId) => {
   try {
     if (!publicId) return false;
@@ -108,23 +146,13 @@ const deleteFile = async (publicId) => {
   }
 };
 
-// === VALIDATE FILE TRÊN CLOUDINARY (TÙY CHỌN) ===
-const validateFileExists = async (publicId) => {
-  try {
-    if (!publicId) return false;
-    const result = await cloudinary.api.resource(publicId);
-    return !!result;
-  } catch (error) {
-    return false;
-  }
-};
-
+// === EXPORT ===
 module.exports = {
   uploadSingle,
   uploadMultiple,
   uploadErrorHandler,
   getFileUrl,
   deleteFile,
-  validateFileExists,
-  cloudinary // export để dùng xóa ở controller
+  cloudinary,
+  getOriginalFilename, // DÙNG TRONG CONTROLLER ĐỂ LƯU TÊN ĐẸP
 };
