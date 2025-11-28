@@ -1,9 +1,11 @@
 const mongoose = require('mongoose');
 
 const AttachmentSchema = new mongoose.Schema({
-    name: { type: String, required: true },
+    name: { type: String, required: true, trim: true },
     url: { type: String, required: true },
-}, { _id: false });
+    public_id: { type: String, required: true },
+    type: { type: String, required: true },
+}, { _id: true });
 
 const CommentSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -14,7 +16,7 @@ const CommentSchema = new mongoose.Schema({
 const TaskSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
-    status: { type: String, enum: ['todo', 'in_progress', 'done'], default: 'todo' },
+    status: { type: String, enum: ['todo', 'in_progress', 'done', 'deleted'], default: 'todo' },
     priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     assignedTo: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

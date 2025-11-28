@@ -232,6 +232,63 @@ const assignTeamLead = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get all members (HR only)
+ * @route   GET /api/teams/members
+ * @access  Private (HR Manager)
+ */
+const getAllMembers = async (req, res) => {
+  try {
+    if (req.user.role !== "hr_manager") {
+      return res.status(403).json({
+        success: false,
+        error: "Only HR managers can view all members"
+      });
+    }
+
+    const members = await teamService.getAllMembers();
+
+    res.status(200).json({
+      success: true,
+      data: members
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+
+/**
+ * @desc    Get members of a team
+ * @route   GET /api/teams/:id/members
+ * @access  Private (Team Lead, HR Manager)
+ */
+const getTeamMembers = async (req, res) => {
+  try {
+    let teamId = req.params.id;
+
+    if (req.user.role === "team_lead") {
+      teamId = req.user.teamId;
+    }
+
+    const members = await teamService.getTeamMembers(teamId);
+
+    res.status(200).json({
+      success: true,
+      data: members
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createTeam,
   getAllTeams,
@@ -241,4 +298,6 @@ module.exports = {
   addMember,
   removeMember,
   assignTeamLead,
+  getTeamMembers,
+  getAllMembers
 };
