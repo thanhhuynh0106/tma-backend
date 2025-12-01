@@ -25,9 +25,7 @@ const createTeam = async (teamData) => {
     name,
     description: description || "",
     leaderId,
-    members: [leaderId],
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    memberIds: [leaderId],
   });
 
   // Update leader's teamId
@@ -264,6 +262,24 @@ const assignTeamLead = async (teamId, newLeaderId) => {
     .populate("memberIds", "profile.fullName email role");
 };
 
+/**
+ * Get all members of a team
+ * @param {String} teamId
+ * @returns {Array}
+ */
+
+const getTeamMembers = async (teamId) => {
+  const members = await User.find({ teamId })
+    .select("_id email role department profile");
+
+  return members;
+};
+
+const getAllMembers = async () => {
+  return await User.find()
+    .select("_id email role department profile");
+};
+
 module.exports = {
   createTeam,
   getAllTeams,
@@ -273,4 +289,6 @@ module.exports = {
   addMember,
   removeMember,
   assignTeamLead,
+  getTeamMembers,
+  getAllMembers
 };

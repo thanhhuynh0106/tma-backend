@@ -5,7 +5,7 @@ const connectDB = require("./config/database");
 const errorHandler = require("./middleware/errorHandler");
 
 dotenv.config();
-
+const path = require('path')
 const app = express();
 connectDB();
 
@@ -18,6 +18,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 
 if (process.env.NODE_ENV === "development") {
   app.use((req, res, next) => {
@@ -48,21 +49,23 @@ app.get("/", (req, res) => {
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/user");
 const teamRoutes = require("./routes/team");
-// const taskRoutes = require('./routes/task');
+const taskRoutes = require('./routes/task');
 const leaveRoutes = require("./routes/leave");
 const attendanceRoutes = require("./routes/attendance");
-// const notificationRoutes = require('./routes/notification');
+const notificationRoutes = require('./routes/notification');
 const messageRoutes = require("./routes/message");
 
 // Mount routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/teams", teamRoutes);
-// app.use('/api/tasks', taskRoutes);
+app.use('/api/tasks', taskRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/attendance", attendanceRoutes);
-// app.use('/api/notifications', notificationRoutes);
+app.use('/api/notifications', notificationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 app.use((req, res, next) => {
   res.status(404).json({
@@ -78,3 +81,4 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
 });
+
