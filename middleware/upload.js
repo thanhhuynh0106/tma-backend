@@ -109,7 +109,7 @@ const upload = multer({
 const uploadSingle = upload.single('attachment');
 const uploadMultiple = upload.array('attachments', 5);
 
-// === XỬ LÝ LỖI ĐẸP ===
+// === XỬ LÝ LỖI ===
 const uploadErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
@@ -134,7 +134,7 @@ const uploadErrorHandler = (err, req, res, next) => {
 const getFileUrl = (file) => file.path;
 
 
-// === XÓA FILE ===
+// === XÓA FILE TRÊN CLOUDINARY ===
 const deleteFile = async (publicId) => {
   try {
     if (!publicId) return false;
@@ -154,5 +154,5 @@ module.exports = {
   getFileUrl,
   deleteFile,
   cloudinary,
-  getOriginalFilename, // DÙNG TRONG CONTROLLER ĐỂ LƯU TÊN ĐẸP
+  getOriginalFilename, 
 };

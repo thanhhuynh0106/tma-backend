@@ -3,8 +3,8 @@ const mongoose = require('mongoose');
 const AttachmentSchema = new mongoose.Schema({
     name: { type: String, required: true, trim: true },
     url: { type: String, required: true },
-    public_id: { type: String, required: true },
-    type: { type: String, required: true },
+    public_id: { type: String },
+    type: { type: String },
 }, { _id: true });
 
 const CommentSchema = new mongoose.Schema({

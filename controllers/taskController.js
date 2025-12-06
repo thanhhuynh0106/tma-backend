@@ -34,6 +34,7 @@ const createTask = async (req, res) => {
     }
 
     const validation = validateTaskData({ title, assignedTo, teamId, dueDate, startDate });
+
     if (!validation.valid) {
       return res.status(400).json({
         success: false,
@@ -656,6 +657,7 @@ const addAttachment = async (req, res) => {
     });
 
     await task.save();
+    await task.populate('comments.userId', 'profile.fullName avatar email'); 
 
     res.json({
       success: true,
@@ -730,7 +732,7 @@ const addAttachmentBulk = async (req, res) => {
       message: 'Files uploaded successfully',
       data: attachments.map((att, index) => ({
         ...att,
-        size: req.files[index].bytes  // DÙNG .bytes, KHÔNG PHẢI .size
+        size: req.files[index].size  // DÙNG .bytes, KHÔNG PHẢI .size
       }))
     });
   } catch (error) {

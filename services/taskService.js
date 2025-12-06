@@ -82,8 +82,8 @@ const canUserAccessTask = (user, task) => {
   const isCreator = task.assignedBy.toString() === user._id.toString();
   const isAssignee = task.assignedTo.some(person => person._id.toString() === user._id.toString());
   const isHR = user.role === 'hr_manager';
-  const isTeamLeadSameTeam = user.role === 'team_lead' &&
-    user.teamId && task.teamId && user.teamId.toString() === task.teamId._id.toString();
+  const taskTeamId = task.teamId._id ? task.teamId._id.toString() : task.teamId.toString();
+  const isTeamLeadSameTeam = user.role === 'team_lead' && user.teamId && user.teamId.toString() === taskTeamId;
 
   return isCreator || isAssignee || isHR || isTeamLeadSameTeam;
 };
