@@ -17,7 +17,8 @@ const {
   getOverdueTasks,
   getTaskStats_endpoint,
   addAttachment,
-  addAttachmentBulk
+  addAttachmentBulk,
+  deleteAttachment,
 } = require('../controllers/taskController');
 
 // All routes require authentication
@@ -45,5 +46,5 @@ router.post('/:id/comments', addComment);
 router.get('/team/:teamId', getTeamTasks);
 router.post('/:id/attachments', uploadSingle, uploadErrorHandler, addAttachment);  // single attachment upload after has been implemented
 router.post('/:id/attachments/bulk', uploadMultiple, uploadErrorHandler, addAttachmentBulk); // multiple attachment upload after has been implemented
-
+router.delete('/:id/attachments/:attachmentId', deleteAttachment);
 module.exports = router;

@@ -1,5 +1,5 @@
 const Notification = require('../models/Notification');
-
+const User = require('../models/User');
 /**
  * Create a new notification
  * @param {String} userId - User ID

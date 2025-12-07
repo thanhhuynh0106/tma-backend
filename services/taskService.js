@@ -36,8 +36,8 @@ const getTaskStats = async (userId) => {
     const stats = await Task.aggregate([
       {
         $match: {
-          assignedTo: new mongoose.Types.ObjectId(userId),
-          status: { $ne: 'deleted' }
+          assignedTo: new mongoose.Types.ObjectId(userId)
+          // BỎ CHECK deleted
         }
       },
       {
@@ -142,6 +142,15 @@ const validateTaskData = (taskData) => {
   return { valid: true, message: 'Valid' };
 };
 
+
+const deleteAttachment = async (taskId, attachmentId) => {
+  try {
+    const response = await apiClient.delete(`/tasks/${taskId}/attachments/${attachmentId}`);
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || error;
+  }
+};
 module.exports = {
   calculateProgress,
   checkIfOverdue,
@@ -149,5 +158,6 @@ module.exports = {
   canUserAccessTask,
   canCreateOrAssignTask,
   canUpdateTaskStatus,
-  validateTaskData
+  validateTaskData,
+  deleteAttachment
 };

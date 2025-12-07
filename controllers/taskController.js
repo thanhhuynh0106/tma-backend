@@ -24,7 +24,7 @@ const { getFileUrl, deleteFile, getOriginalFilename } = require('../middleware/u
  */
 const createTask = async (req, res) => {
   try {
-    const { title, description, assignedTo, teamId, priority = 'medium', dueDate, startDate, tags = [], attachments = [], comments = [] } = req.body;
+    const { title, description, assignedTo, teamId, priority = 'medium', difficulty = 'medium', dueDate, startDate, tags = [], attachments = [], comments = [] } = req.body;
 
     if (!canCreateOrAssignTask(req.user)) {
       return res.status(403).json({
@@ -49,6 +49,7 @@ const createTask = async (req, res) => {
       assignedTo,
       teamId,
       priority,
+      difficulty,
       status: 'todo',
       dueDate: dueDate || null,
       startDate: startDate || null,
@@ -92,16 +93,14 @@ const createTask = async (req, res) => {
 const getAllTasks = async (req, res) => {
   try {
     const { page = 1, limit = 10, status, priority, teamId, search } = req.query;
-    const query = { status: { $ne: 'deleted' } };
+    const query = {}; // BỎ CHECK deleted
 
     // Only HR Manager and Team Lead can view all tasks
     if (req.user.role === 'hr_manager') {
-      // HR Manager: see all tasks, optionally filter by teamId
       if (teamId) {
         query.teamId = teamId;
       }
     } else if (req.user.role === 'team_lead') {
-      // Team Lead: see only tasks in their team
       if (!req.user.teamId) {
         return res.json({ 
           success: true, 
@@ -111,7 +110,6 @@ const getAllTasks = async (req, res) => {
       }
       query.teamId = req.user.teamId;
     } else {
-      // Employee: not allowed - use /api/tasks/my instead
       return res.status(403).json({
         success: false,
         error: 'Only HR Manager and Team Lead can view all tasks. Use /api/tasks/my for your assigned tasks.'
@@ -169,13 +167,13 @@ const getTaskById = async (req, res) => {
       .populate('teamId', 'name')
       .populate('comments.userId', 'profile.fullName avatar email');
 
-    if (!task || task.status === 'deleted') {
+    if (!task) {
       return res.status(404).json({
         success: false,
         error: 'Task not found'
       });
     }
-    console.log("task.assignedTo (after populate):", task.assignedTo);
+
     if (!canUserAccessTask(req.user, task)) {
       return res.status(403).json({
         success: false,
@@ -208,7 +206,7 @@ const getTaskById = async (req, res) => {
 const updateTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
+    if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
@@ -216,10 +214,25 @@ const updateTask = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
 
-    const allowedFields = ['title', 'description', 'priority', 'dueDate', 'startDate', 'tags'];
+    const allowedFields = ['title', 'description', 'priority', 'difficulty', 'dueDate', 'startDate', 'tags'];
     allowedFields.forEach(field => {
       if (req.body[field] !== undefined) task[field] = req.body[field];
     });
+
+    // Xử lý xóa attachments nếu có
+    if (req.body.removedAttachments && Array.isArray(req.body.removedAttachments)) {
+      for (const attachmentId of req.body.removedAttachments) {
+        const attachment = task.attachments.id(attachmentId);
+        if (attachment) {
+          // Xóa file trên Cloudinary
+          if (attachment.public_id) {
+            await deleteFile(attachment.public_id);
+          }
+          // Xóa attachment khỏi array
+          task.attachments.pull(attachmentId);
+        }
+      }
+    }
 
     await task.save();
 
@@ -240,7 +253,7 @@ const updateTask = async (req, res) => {
 };
 
 /**
- * @desc    Delete task (soft delete)
+ * @desc    Delete task (HARD DELETE - XÓA HOÀN TOÀN)
  * @route   DELETE /api/tasks/:id
  * @access  Private (Creator or HR)
  */
@@ -256,10 +269,19 @@ const deleteTask = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Permission denied' });
     }
 
-    task.status = 'deleted';
-    await task.save();
+    // XÓA TẤT CẢ ATTACHMENTS TRÊN CLOUDINARY
+    if (task.attachments && task.attachments.length > 0) {
+      for (const attachment of task.attachments) {
+        if (attachment.public_id) {
+          await deleteFile(attachment.public_id);
+        }
+      }
+    }
 
-    res.json({ success: true, message: 'Task deleted successfully' });
+    // XÓA TASK KHỎI DATABASE
+    await Task.findByIdAndDelete(req.params.id);
+
+    res.json({ success: true, message: 'Task deleted permanently' });
   } catch (error) {
     console.error('Delete task error:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -290,7 +312,7 @@ const assignTask = async (req, res) => {
     }
 
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
+    if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
@@ -335,7 +357,7 @@ const updateTaskStatus = async (req, res) => {
     }
 
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
+    if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
@@ -385,7 +407,7 @@ const updateTaskProgress = async (req, res) => {
     }
 
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
+    if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
@@ -426,8 +448,7 @@ const getMyTasks = async (req, res) => {
   try {
     const { page = 1, limit = 10, status, priority } = req.query;
     const query = {
-      assignedTo: req.user._id,
-      status: { $ne: 'deleted' }
+      assignedTo: req.user._id
     };
 
     if (status) query.status = status;
@@ -473,11 +494,7 @@ const getTeamTasks = async (req, res) => {
     const { teamId } = req.params;
     const { page = 1, limit = 10, status } = req.query;
 
-    const query = {
-      teamId,
-      status: { $ne: 'deleted' }
-    };
-
+    const query = { teamId };
     if (status) query.status = status;
 
     const skip = (page - 1) * limit;
@@ -523,7 +540,7 @@ const addComment = async (req, res) => {
     }
 
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
+    if (!task) {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
@@ -632,8 +649,8 @@ const addAttachment = async (req, res) => {
     }
 
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
-      deleteFile(req.file.filename);
+    if (!task) {
+      await deleteFile(req.file.filename);
       return res.status(404).json({
         success: false,
         error: 'Task not found'
@@ -641,19 +658,20 @@ const addAttachment = async (req, res) => {
     }
 
     if (!canUserAccessTask(req.user, task)) {
-      deleteFile(req.file.filename);
+      await deleteFile(req.file.filename);
       return res.status(403).json({
         success: false,
         error: 'Not authorized'
       });
     }
 
-    // Add attachment to task
+    // THÊM ATTACHMENT VỚI SIZE
     task.attachments.push({
-      name: getOriginalFilename(req.file.filename), // Tên đẹp: "Báo cáo tháng 10.pdf"
-      url: req.file.path,
-      public_id: req.file.filename,                 // Dùng để xóa sau
+      name: getOriginalFilename(req.file),     // Tên gốc: "file (1).csv"
+      url: req.file.path,                      // URL Cloudinary
+      public_id: req.file.filename,            // Public ID để xóa
       type: req.file.mimetype,
+      size: req.file.size                      // SIZE (bytes)
     });
 
     await task.save();
@@ -663,14 +681,14 @@ const addAttachment = async (req, res) => {
       success: true,
       message: 'File uploaded successfully',
       data: {
-        name: req.file.originalname,
-        url: getFileUrl(req.file.filename),
+        name: getOriginalFilename(req.file),
+        url: req.file.path,
         size: req.file.size,
         type: req.file.mimetype
       }
     });
   } catch (error) {
-    if (req.file) deleteFile(req.file.filename);
+    if (req.file) await deleteFile(req.file.filename);
     
     console.error('Add attachment error:', error);
     res.status(500).json({
@@ -695,8 +713,8 @@ const addAttachmentBulk = async (req, res) => {
     }
 
     const task = await Task.findById(req.params.id);
-    if (!task || task.status === 'deleted') {
-      // XÓA TẤT CẢ TRÊN CLOUDINARY
+    if (!task) {
+      // XÓA TẤT CẢ FILE TRÊN CLOUDINARY
       for (const file of req.files) {
         await deleteFile(file.filename);
       }
@@ -716,12 +734,13 @@ const addAttachmentBulk = async (req, res) => {
       });
     }
 
-    // SỬA LỖI: DÙNG file, KHÔNG PHẢI req.file
+    // TẠO ATTACHMENTS VỚI SIZE
     const attachments = req.files.map(file => ({
-      name: file.originalname,
-      url: file.path,               // URL từ Cloudinary
-      public_id: file.filename,     // public_id
-      type: file.mimetype
+      name: getOriginalFilename(file.originalname),
+      url: file.path,
+      public_id: file.filename,
+      type: file.mimetype,
+      size: file.size                      // SIZE (bytes)
     }));
 
     task.attachments.push(...attachments);
@@ -730,10 +749,7 @@ const addAttachmentBulk = async (req, res) => {
     res.json({
       success: true,
       message: 'Files uploaded successfully',
-      data: attachments.map((att, index) => ({
-        ...att,
-        size: req.files[index].size  // DÙNG .bytes, KHÔNG PHẢI .size
-      }))
+      data: attachments
     });
   } catch (error) {
     if (req.files) {
@@ -746,6 +762,46 @@ const addAttachmentBulk = async (req, res) => {
       success: false,
       error: error.message
     });
+  }
+};
+
+/**
+ * @desc    Delete attachment from task
+ * @route   DELETE /api/tasks/:id/attachments/:attachmentId
+ * @access  Private
+ */
+const deleteAttachment = async (req, res) => {
+  try {
+    const { id, attachmentId } = req.params;
+
+    const task = await Task.findById(id);
+    if (!task) {
+      return res.status(404).json({ success: false, error: 'Task not found' });
+    }
+
+    if (!canUserAccessTask(req.user, task)) {
+      return res.status(403).json({ success: false, error: 'Not authorized' });
+    }
+
+    const attachment = task.attachments.id(attachmentId);
+    if (!attachment) {
+      return res.status(404).json({ success: false, error: 'Attachment not found' });
+    }
+
+    // Xóa file trên Cloudinary
+    await deleteFile(attachment.public_id);
+
+    // Xóa attachment khỏi array
+    task.attachments.pull(attachmentId);
+    await task.save();
+
+    res.json({
+      success: true,
+      message: 'Attachment deleted successfully'
+    });
+  } catch (error) {
+    console.error('Delete attachment error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
@@ -764,5 +820,6 @@ module.exports = {
   getOverdueTasks,
   getTaskStats_endpoint,
   addAttachment,
-  addAttachmentBulk
+  addAttachmentBulk,
+  deleteAttachment
 };
