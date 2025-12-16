@@ -13,6 +13,13 @@ const CommentSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
 }, { _id: false });
 
+const SubTaskSchema = new mongoose.Schema({
+    title: { type: String, required: true, trim: true },
+    isCompleted: { type: Boolean, default: false },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now },
+}, { _id: true });
+
 const TaskSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true },
     description: { type: String, default: '' },
@@ -27,8 +34,23 @@ const TaskSchema = new mongoose.Schema({
     progress: { type: Number, min: 0, max: 100, default: 0 },
     attachments: [AttachmentSchema],
     comments: [CommentSchema],
+    subTasks: [SubTaskSchema],
     tags: [String],
 }, { timestamps: true, collection: 'tasks' });
 
+
+TaskSchema.pre('save', function(next) {
+    if (this.subTasks && this.subTasks.length > 0) {
+        const completedCount = this.subTasks.filter(st => st.isCompleted).length;
+        this.progress = Math.round((completedCount / this.subTasks.length) * 100);
+        
+        if (this.progress === 100 && this.status !== 'done') {
+            this.status = 'done';
+        } else if (this.progress > 0 && this.progress < 100 && this.status === 'todo') {
+            this.status = 'in_progress';
+        }
+    }
+    next();
+});
 
 module.exports = mongoose.model('Task', TaskSchema);

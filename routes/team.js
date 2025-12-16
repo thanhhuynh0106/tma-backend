@@ -15,31 +15,30 @@ const {
 const { protect, authorize } = require("../middleware/auth");
 const { USER_ROLES } = require("../utils/constants");
 
+// IMPORTANT: Specific routes MUST come before parameterized routes
+// Place /members before /:id to avoid route conflicts
+
+// Get all members (must be before /:id routes)
+router.get(
+  "/members",
+  protect,
+  authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
+  getAllMembers
+);
+
+// General team routes
 router.post("/", protect, authorize(USER_ROLES.HR_MANAGER), createTeam);
 router.get("/", protect, authorize(USER_ROLES.HR_MANAGER), getAllTeams);
 router.get("/:id", protect, authorize(USER_ROLES.HR_MANAGER), getTeamById);
 router.put("/:id", protect, authorize(USER_ROLES.HR_MANAGER), updateTeam);
 router.delete("/:id", protect, authorize(USER_ROLES.HR_MANAGER), deleteTeam);
 
+// Team member operations
 router.post(
   "/:id/members",
   protect,
   authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
   addMember
-);
-
-router.delete(
-  "/:id/members/:userId",
-  protect,
-  authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
-  removeMember
-);
-
-router.put(
-  "/:id/leader",
-  protect,
-  authorize(USER_ROLES.HR_MANAGER),
-  assignTeamLead
 );
 
 router.get(
@@ -49,11 +48,19 @@ router.get(
   getTeamMembers
 );
 
-router.get(
-  "/members",
+router.delete(
+  "/:id/members/:userId",
   protect,
   authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
-  getAllMembers
+  removeMember
+);
+
+// Team leader operations
+router.put(
+  "/:id/leader",
+  protect,
+  authorize(USER_ROLES.HR_MANAGER),
+  assignTeamLead
 );
 
 module.exports = router;

@@ -17,7 +17,13 @@ const {
   getOverdueTasks,
   getTaskStats_endpoint,
   addAttachment,
-  addAttachmentBulk
+  addAttachmentBulk,
+  // Subtask operations
+  createSubtask,
+  toggleSubtask,
+  updateSubtask,
+  deleteSubtask,
+  getSubtasks
 } = require('../controllers/taskController');
 
 // All routes require authentication
@@ -45,5 +51,12 @@ router.post('/:id/comments', addComment);
 router.get('/team/:teamId', getTeamTasks);
 router.post('/:id/attachments', uploadSingle, uploadErrorHandler, addAttachment);  // single attachment upload after has been implemented
 router.post('/:id/attachments/bulk', uploadMultiple, uploadErrorHandler, addAttachmentBulk); // multiple attachment upload after has been implemented
+
+// Subtask routes
+router.get('/:id/subtasks', getSubtasks);                    // Get all subtasks
+router.post('/:id/subtasks', createSubtask);                 // Create subtask
+router.put('/:id/subtasks/:subtaskId', toggleSubtask);       // Toggle subtask completion
+router.patch('/:id/subtasks/:subtaskId', updateSubtask);     // Update subtask title/status
+router.delete('/:id/subtasks/:subtaskId', deleteSubtask);    // Delete subtask
 
 module.exports = router;

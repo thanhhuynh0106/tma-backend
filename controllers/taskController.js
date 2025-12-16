@@ -747,6 +747,295 @@ const addAttachmentBulk = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Create a subtask
+ * @route   POST /api/tasks/:id/subtasks
+ * @access  Private (Assignee, Creator, HR, Team Lead)
+ */
+const createSubtask = async (req, res) => {
+  try {
+    const { title } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Subtask title is required'
+      });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task || task.status === 'deleted') {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Task not found' 
+      });
+    }
+
+    // Check if user has access to this task
+    if (!canUserAccessTask(req.user, task)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Not authorized to add subtasks to this task' 
+      });
+    }
+
+    // Create new subtask
+    const newSubtask = {
+      title: title.trim(),
+      isCompleted: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    task.subTasks.push(newSubtask);
+    await task.save(); // This will trigger the pre-save hook to recalculate progress
+
+    await task.populate([
+      { path: 'assignedBy', select: 'profile.fullName email' },
+      { path: 'assignedTo', select: 'profile.fullName email' },
+      { path: 'teamId', select: 'name' }
+    ]);
+
+    res.status(201).json({
+      success: true,
+      message: 'Subtask created successfully',
+      data: {
+        task: task.toObject(),
+        subtask: task.subTasks[task.subTasks.length - 1]
+      }
+    });
+  } catch (error) {
+    console.error('Create subtask error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Toggle subtask completion status
+ * @route   PUT /api/tasks/:id/subtasks/:subtaskId
+ * @access  Private (Assignee, Creator, HR, Team Lead)
+ */
+const toggleSubtask = async (req, res) => {
+  try {
+    const { id, subtaskId } = req.params;
+
+    const task = await Task.findById(id);
+    if (!task || task.status === 'deleted') {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Task not found' 
+      });
+    }
+
+    // Check if user has access
+    if (!canUserAccessTask(req.user, task)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Not authorized to update this subtask' 
+      });
+    }
+
+    // Find the subtask
+    const subtask = task.subTasks.id(subtaskId);
+    if (!subtask) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Subtask not found' 
+      });
+    }
+
+    // Toggle completion status
+    subtask.isCompleted = !subtask.isCompleted;
+    subtask.updatedAt = new Date();
+
+    await task.save(); // This will trigger progress recalculation
+
+    await task.populate([
+      { path: 'assignedBy', select: 'profile.fullName email' },
+      { path: 'assignedTo', select: 'profile.fullName email' },
+      { path: 'teamId', select: 'name' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Subtask updated successfully',
+      data: {
+        task: task.toObject(),
+        subtask: subtask
+      }
+    });
+  } catch (error) {
+    console.error('Toggle subtask error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Update subtask title
+ * @route   PATCH /api/tasks/:id/subtasks/:subtaskId
+ * @access  Private (Assignee, Creator, HR, Team Lead)
+ */
+const updateSubtask = async (req, res) => {
+  try {
+    const { id, subtaskId } = req.params;
+    const { title, isCompleted } = req.body;
+
+    const task = await Task.findById(id);
+    if (!task || task.status === 'deleted') {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Task not found' 
+      });
+    }
+
+    if (!canUserAccessTask(req.user, task)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Not authorized to update this subtask' 
+      });
+    }
+
+    const subtask = task.subTasks.id(subtaskId);
+    if (!subtask) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Subtask not found' 
+      });
+    }
+
+    // Update fields if provided
+    if (title !== undefined && title.trim()) {
+      subtask.title = title.trim();
+    }
+    if (isCompleted !== undefined) {
+      subtask.isCompleted = isCompleted;
+    }
+    subtask.updatedAt = new Date();
+
+    await task.save();
+
+    await task.populate([
+      { path: 'assignedBy', select: 'profile.fullName email' },
+      { path: 'assignedTo', select: 'profile.fullName email' },
+      { path: 'teamId', select: 'name' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Subtask updated successfully',
+      data: {
+        task: task.toObject(),
+        subtask: subtask
+      }
+    });
+  } catch (error) {
+    console.error('Update subtask error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Delete a subtask
+ * @route   DELETE /api/tasks/:id/subtasks/:subtaskId
+ * @access  Private (Assignee, Creator, HR, Team Lead)
+ */
+const deleteSubtask = async (req, res) => {
+  try {
+    const { id, subtaskId } = req.params;
+
+    const task = await Task.findById(id);
+    if (!task || task.status === 'deleted') {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Task not found' 
+      });
+    }
+
+    if (!canUserAccessTask(req.user, task)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Not authorized to delete this subtask' 
+      });
+    }
+
+    const subtask = task.subTasks.id(subtaskId);
+    if (!subtask) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Subtask not found' 
+      });
+    }
+
+    // Remove the subtask using pull method
+    task.subTasks.pull(subtaskId);
+    await task.save(); // This will recalculate progress
+
+    await task.populate([
+      { path: 'assignedBy', select: 'profile.fullName email' },
+      { path: 'assignedTo', select: 'profile.fullName email' },
+      { path: 'teamId', select: 'name' }
+    ]);
+
+    res.json({
+      success: true,
+      message: 'Subtask deleted successfully',
+      data: task.toObject()
+    });
+  } catch (error) {
+    console.error('Delete subtask error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get all subtasks for a task
+ * @route   GET /api/tasks/:id/subtasks
+ * @access  Private
+ */
+const getSubtasks = async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    
+    if (!task || task.status === 'deleted') {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Task not found' 
+      });
+    }
+
+    if (!canUserAccessTask(req.user, task)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: 'Not authorized to view this task' 
+      });
+    }
+
+    res.json({
+      success: true,
+      count: task.subTasks.length,
+      data: task.subTasks
+    });
+  } catch (error) {
+    console.error('Get subtasks error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createTask,
   getAllTasks,
@@ -762,5 +1051,11 @@ module.exports = {
   getOverdueTasks,
   getTaskStats_endpoint,
   addAttachment,
-  addAttachmentBulk
+  addAttachmentBulk,
+  // Subtask operations
+  createSubtask,
+  toggleSubtask,
+  updateSubtask,
+  deleteSubtask,
+  getSubtasks
 };
