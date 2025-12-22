@@ -11,7 +11,7 @@ const CommentSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     text: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
-}, { _id: false });
+}, { _id: true });
 
 const SubTaskSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true },
@@ -42,13 +42,24 @@ const TaskSchema = new mongoose.Schema({
 TaskSchema.pre('save', function(next) {
     if (this.subTasks && this.subTasks.length > 0) {
         const completedCount = this.subTasks.filter(st => st.isCompleted).length;
-        this.progress = Math.round((completedCount / this.subTasks.length) * 100);
+        const totalSubtasks = this.subTasks.length;
+        this.progress = Math.round((completedCount / totalSubtasks) * 100);
         
-        if (this.progress === 100 && this.status !== 'done') {
+        if (completedCount === totalSubtasks) {
             this.status = 'done';
-        } else if (this.progress > 0 && this.progress < 100 && this.status === 'todo') {
-            this.status = 'in_progress';
+        } else if (completedCount > 0) {
+            if (this.status === 'done') {
+                this.status = 'in_progress';
+            } else if (this.status === 'todo') {
+                this.status = 'in_progress';
+            }
+        } else {
+            if (this.status === 'done') {
+                this.status = 'todo';
+            }
         }
+    } else {
+        this.progress = 0;
     }
     next();
 });

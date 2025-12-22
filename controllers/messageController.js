@@ -12,10 +12,17 @@ const sendMessage = async (req, res) => {
         const senderId = req.user._id;
         const { receiverId, message, attachments } = req.body;
 
-        if (!receiverId || !message) {
+        if (!receiverId) {
             return res.status(400).json({
                 success: false,
-                error: 'Receiver ID and message are required'
+                error: 'Receiver ID is required'
+            });
+        }
+
+        if (!message && (!attachments || attachments.length === 0)) {
+            return res.status(400).json({
+                success: false,
+                error: 'Message or attachments are required'
             });
         }
 
@@ -57,9 +64,26 @@ const sendMessage = async (req, res) => {
         await conversation.save();
         await newMessage.populate('senderId', 'email profile');
 
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`conversation_${conversation._id}`).emit('new_message', {
+                message: newMessage,
+                conversationId: conversation._id
+            });
+
+            io.to(receiverId.toString()).emit('message_notification', {
+                conversationId: conversation._id,
+                senderId: senderId.toString(),
+                senderName: req.user.profile?.fullName || req.user.email,
+                message: message,
+                timestamp: newMessage.createdAt
+            });
+        }
+
         res.status(201).json({
             success: true,
-            data: newMessage
+            data: newMessage,
+            conversationId: conversation._id
         });
     } catch (error) {
         console.error('Send message error:', error);

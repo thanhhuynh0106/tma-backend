@@ -71,6 +71,7 @@ const upload = multer({
 });
 
 const uploadSingle = upload.single('attachment');
+const uploadFile = upload.single('file'); // For general file upload
 const uploadMultiple = upload.array('attachments', 5);
 
 const uploadErrorHandler = (err, req, res, next) => {
@@ -93,7 +94,15 @@ const uploadErrorHandler = (err, req, res, next) => {
   next();
 };
 
-const getFileUrl = (filename) => {
+const getFileUrl = (filename, req = null) => {
+  // If request is available, use it to construct the full URL
+  if (req) {
+    const protocol = req.protocol;
+    const host = req.get('host');
+    return `${protocol}://${host}/uploads/${filename}`;
+  }
+  
+  // Fallback: return relative path (will be constructed on client side)
   return `/uploads/${filename}`;
 };
 
@@ -123,6 +132,7 @@ const getOriginalFilename = (filename) => {
 
 module.exports = {
   uploadSingle,
+  uploadFile,
   uploadMultiple,
   uploadErrorHandler,
   getFileUrl,

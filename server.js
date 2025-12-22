@@ -1,4 +1,6 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const connectDB = require("./config/database");
@@ -7,6 +9,16 @@ const errorHandler = require("./middleware/errorHandler");
 dotenv.config();
 const path = require('path')
 const app = express();
+const server = http.createServer(app);
+
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || "*",
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+});
+
 connectDB();
 
 app.use(
@@ -18,6 +30,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.set('io', io);
 
 
 if (process.env.NODE_ENV === "development") {
@@ -54,6 +67,7 @@ const leaveRoutes = require("./routes/leave");
 const attendanceRoutes = require("./routes/attendance");
 const notificationRoutes = require('./routes/notification');
 const messageRoutes = require("./routes/message");
+const uploadRoutes = require("./routes/upload");
 
 // Mount routes
 app.use("/api/auth", authRoutes);
@@ -64,6 +78,7 @@ app.use("/api/leaves", leaveRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/upload", uploadRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 
@@ -76,9 +91,14 @@ app.use((req, res, next) => {
 
 app.use(errorHandler);
 
+
+const socketHandler = require('./utils/socketHandler');
+socketHandler(io);
+
 const PORT = process.env.PORT;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Socket.IO is ready`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
 });
 

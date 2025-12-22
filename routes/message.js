@@ -11,7 +11,6 @@ const {
 } = require('../controllers/messageController');
 const { protect } = require('../middleware/auth');
 
-// Apply authentication to all routes
 router.use(protect);
 
 // Get unread count
@@ -34,6 +33,8 @@ router.put('/:conversationId/read', markAsRead);
 
 // Delete message
 router.delete('/:id', deleteMessage);
+
+
 
 module.exports = router;
 

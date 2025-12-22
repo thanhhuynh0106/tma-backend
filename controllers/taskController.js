@@ -342,18 +342,29 @@ const updateTaskStatus = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Not authorized' });
     }
 
-    task.status = status;
-    
-    // Auto-update progress based on status
-    if (status === 'done') {
-      task.progress = 100;
-    } else if (status === 'in_progress') {
-      task.progress = Math.max(50, task.progress);
+    if (task.subTasks && task.subTasks.length > 0) {
+      const completedCount = task.subTasks.filter(st => st.isCompleted).length;
+      const totalSubtasks = task.subTasks.length;
+
+      if (status === 'done' && completedCount < totalSubtasks) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot mark as done. ${totalSubtasks - completedCount} subtask(s) still incomplete.`
+        });
+      }
+
+      if (status === 'todo' && completedCount > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot mark as todo. ${completedCount} subtask(s) already completed. Use 'in_progress' instead.`
+        });
+      }
     }
 
+    task.status = status;
     await task.save();
-    await notifyTaskUpdated(task, req.user._id);
 
+    await notifyTaskUpdated(task, req.user._id);
     await task.populate('assignedBy assignedTo teamId');
 
     res.json({
@@ -539,7 +550,7 @@ const addComment = async (req, res) => {
     await task.save();
     await notifyCommentAdded(task, req.user._id);
 
-    await task.populate('comments.userId', 'profile.fullName avatar email');
+    await task.populate('comments.userId', 'profile.fullName avatar email profile.position');
 
     res.json({
       success: true,
