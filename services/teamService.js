@@ -4,8 +4,8 @@ const Task = require("../models/Task");
 
 const populateTeam = async (teamId) => {
   return Team.findById(teamId)
-    .populate("leaderId", "profile.fullName email role")
-    .populate("memberIds", "profile.fullName email role teamId managerId");
+    .populate("leaderId", "profile email role")
+    .populate("memberIds", "profile email role teamId managerId");
 };
 
 const ensureLeaderEligible = async (leaderId, teamIdToExclude = null) => {
@@ -81,8 +81,8 @@ const getAllTeams = async (page = 1, limit = 10) => {
   const teams = await Team.find()
     .skip(skip)
     .limit(limit)
-    .populate("leaderId", "profile.fullName email")
-    .populate("memberIds", "profile.fullName email role")
+    .populate("leaderId", "profile email")
+    .populate("memberIds", "profile email role")
     .sort({ createdAt: -1 });
 
   return {
@@ -104,8 +104,8 @@ const getAllTeams = async (page = 1, limit = 10) => {
 
 const getTeamById = async (teamId) => {
   return await Team.findById(teamId)
-    .populate("leaderId", "profile.fullName email phone")
-    .populate("memberIds", "profile.fullName email role department");
+    .populate("leaderId", "profile email phone")
+    .populate("memberIds", "profile email role");
 };
 
 /**
@@ -166,10 +166,7 @@ const deleteTeam = async (teamId) => {
   }
 
   // Remove teamId/managerId from all members
-  await User.updateMany(
-    { teamId },
-    { $unset: { teamId: 1, managerId: 1 } }
-  );
+  await User.updateMany({ teamId }, { $unset: { teamId: 1, managerId: 1 } });
 
   // Delete team
   return await Team.findByIdAndDelete(teamId);
@@ -301,7 +298,13 @@ const assignTeamLead = async (teamId, newLeaderId) => {
 
   // All other members belong to this team; manager is new leader
   await User.updateMany(
-    { _id: { $in: team.memberIds.filter((id) => id.toString() !== newLeaderId.toString()) } },
+    {
+      _id: {
+        $in: team.memberIds.filter(
+          (id) => id.toString() !== newLeaderId.toString()
+        ),
+      },
+    },
     { teamId, managerId: newLeaderId }
   );
 
@@ -337,15 +340,15 @@ const getAvailableLeaders = async (excludeTeamId = null) => {
  */
 
 const getTeamMembers = async (teamId) => {
-  const members = await User.find({ teamId })
-    .select("_id email role department profile");
+  const members = await User.find({ teamId }).select(
+    "_id email role department profile"
+  );
 
   return members;
 };
 
 const getAllMembers = async () => {
-  return await User.find()
-    .select("_id email role department profile");
+  return await User.find().select("_id email role department profile");
 };
 
 module.exports = {
@@ -359,5 +362,5 @@ module.exports = {
   assignTeamLead,
   getAvailableLeaders,
   getTeamMembers,
-  getAllMembers
+  getAllMembers,
 };
