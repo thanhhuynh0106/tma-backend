@@ -289,6 +289,28 @@ const getTeamMembers = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Get available leaders (team_lead only) with leading status
+ * @route   GET /api/teams/available-leaders
+ * @access  Private (HR Manager)
+ */
+const getAvailableLeaders = async (req, res) => {
+  try {
+    const { excludeTeamId = null } = req.query;
+    const leaders = await teamService.getAvailableLeaders(excludeTeamId);
+
+    res.status(200).json({
+      success: true,
+      data: leaders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createTeam,
   getAllTeams,
@@ -299,5 +321,6 @@ module.exports = {
   removeMember,
   assignTeamLead,
   getTeamMembers,
-  getAllMembers
+  getAllMembers,
+  getAvailableLeaders
 };

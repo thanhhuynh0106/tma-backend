@@ -1,5 +1,4 @@
 const User = require("../models/User");
-const USER = require("../models/User");
 
 /**
  * Get all users with pagination and filters
@@ -15,7 +14,7 @@ const getAllUsers = async (filters = {}, page = 1, limit = 10) => {
 
   if (filters.search) {
     query.$or = [
-      { name: { $regex: filters.search, $options: "i" } },
+      { "profile.fullName": { $regex: filters.search, $options: "i" } },
       { email: { $regex: filters.search, $options: "i" } },
     ];
   }
@@ -27,14 +26,16 @@ const getAllUsers = async (filters = {}, page = 1, limit = 10) => {
 
   // filter by department
   if (filters.department) {
-    query.department = filters.department;
+    query["profile.department"] = filters.department;
   }
 
-  const total = await USER.countDocuments(query);
-  const users = await USER.find(query)
+  const total = await User.countDocuments(query);
+  const users = await User.find(query)
     .skip(skip)
     .limit(limit)
     .select("-password") // exclude password field
+    .populate("teamId", "name")
+    .populate("managerId", "profile.fullName email")
     .sort({ createdAt: -1 });
 
   return {
@@ -103,7 +104,10 @@ const deleteUser = async (userId) => {
  */
 
 const getUsersByTeam = async (teamId) => {
-  return await User.find({ teamId, isActive: true }).select("-password");
+  return await User.find({ teamId, isActive: true })
+    .select("-password")
+    .populate("teamId", "name")
+    .populate("managerId", "profile.fullName email");
 };
 
 module.exports = {

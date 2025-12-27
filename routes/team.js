@@ -10,7 +10,8 @@ const {
   removeMember,
   assignTeamLead,
   getTeamMembers,
-  getAllMembers
+  getAllMembers,
+  getAvailableLeaders
 } = require("../controllers/teamController");
 const { protect, authorize } = require("../middleware/auth");
 const { USER_ROLES } = require("../utils/constants");
@@ -22,8 +23,16 @@ const { USER_ROLES } = require("../utils/constants");
 router.get(
   "/members",
   protect,
-  authorize(USER_ROLES.TEAM_LEAD, USER_ROLES.HR_MANAGER),
+  authorize(USER_ROLES.HR_MANAGER),
   getAllMembers
+);
+
+// Get available leaders (must be before /:id routes)
+router.get(
+  "/available-leaders",
+  protect,
+  authorize(USER_ROLES.HR_MANAGER),
+  getAvailableLeaders
 );
 
 // General team routes

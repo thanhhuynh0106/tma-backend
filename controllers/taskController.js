@@ -1,4 +1,5 @@
 const Task = require('../models/Task');
+const Team = require('../models/Team');
 const User = require('../models/User');
 const {
   canUserAccessTask,
@@ -38,6 +39,42 @@ const createTask = async (req, res) => {
       return res.status(400).json({
         success: false,
         error: validation.message
+      });
+    }
+
+    // Team lead can only create tasks for their own team
+    if (req.user.role === 'team_lead') {
+      if (!req.user.teamId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Team lead must belong to a team to create tasks'
+        });
+      }
+      if (req.user.teamId.toString() !== teamId.toString()) {
+        return res.status(403).json({
+          success: false,
+          error: 'Team lead can only create tasks for their own team'
+        });
+      }
+    }
+
+    const team = await Team.findById(teamId).select('_id');
+    if (!team) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid teamId'
+      });
+    }
+
+    const uniqueAssignees = [...new Set(assignedTo.map((id) => id.toString()))];
+    const assigneesInTeam = await User.countDocuments({
+      _id: { $in: uniqueAssignees },
+      teamId: teamId
+    });
+    if (assigneesInTeam !== uniqueAssignees.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'All assignees must be members of the selected team'
       });
     }
 
@@ -293,8 +330,37 @@ const assignTask = async (req, res) => {
       return res.status(404).json({ success: false, error: 'Task not found' });
     }
 
-    const newAssignees = assignedTo.filter(id => !task.assignedTo.includes(id));
-    task.assignedTo = assignedTo;
+    // Team lead can only assign tasks within their own team
+    if (req.user.role === 'team_lead') {
+      if (!req.user.teamId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Team lead must belong to a team to assign tasks'
+        });
+      }
+      if (!task.teamId || task.teamId.toString() !== req.user.teamId.toString()) {
+        return res.status(403).json({
+          success: false,
+          error: 'Team lead can only assign tasks within their own team'
+        });
+      }
+    }
+
+    const uniqueAssignees = [...new Set(assignedTo.map((id) => id.toString()))];
+    const assigneesInTeam = await User.countDocuments({
+      _id: { $in: uniqueAssignees },
+      teamId: task.teamId
+    });
+    if (assigneesInTeam !== uniqueAssignees.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'All assignees must be members of this task\'s team'
+      });
+    }
+
+    const existingAssigneeSet = new Set(task.assignedTo.map((id) => id.toString()));
+    const newAssignees = uniqueAssignees.filter((id) => !existingAssigneeSet.has(id));
+    task.assignedTo = uniqueAssignees;
     await task.save();
 
     // Notify new assignees

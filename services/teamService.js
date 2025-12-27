@@ -2,6 +2,34 @@ const Team = require("../models/Team");
 const User = require("../models/User");
 const Task = require("../models/Task");
 
+const populateTeam = async (teamId) => {
+  return Team.findById(teamId)
+    .populate("leaderId", "profile.fullName email role")
+    .populate("memberIds", "profile.fullName email role teamId managerId");
+};
+
+const ensureLeaderEligible = async (leaderId, teamIdToExclude = null) => {
+  const leader = await User.findById(leaderId);
+  if (!leader) {
+    throw new Error("Leader user not found");
+  }
+
+  if (leader.role !== "team_lead") {
+    throw new Error("Selected leader must have role team_lead");
+  }
+
+  const leadingAnotherTeam = await Team.findOne({
+    leaderId,
+    ...(teamIdToExclude ? { _id: { $ne: teamIdToExclude } } : {}),
+  }).select("_id");
+
+  if (leadingAnotherTeam) {
+    throw new Error("This team lead is already leading another team");
+  }
+
+  return leader;
+};
+
 /**
  *  Create a new team
  *  @param {Object} teamData
@@ -16,9 +44,10 @@ const createTeam = async (teamData) => {
     throw new Error("Team name already exists");
   }
 
-  const leader = await User.findById(leaderId);
-  if (!leader) {
-    throw new Error("Leader user not found");
+  const leader = await ensureLeaderEligible(leaderId);
+
+  if (leader.teamId) {
+    throw new Error("This user already belongs to a team");
   }
 
   const team = await Team.create({
@@ -28,10 +57,14 @@ const createTeam = async (teamData) => {
     memberIds: [leaderId],
   });
 
-  // Update leader's teamId
-  await User.findByIdAndUpdate(leaderId, { teamId: team._id }, { new: true });
+  // Update leader's teamId/managerId
+  await User.findByIdAndUpdate(
+    leaderId,
+    { teamId: team._id, managerId: null },
+    { new: true }
+  );
 
-  return team.populate("leaderId", "profile.fullName email");
+  return team.populate("leaderId", "profile.fullName email role");
 };
 
 /**
@@ -92,32 +125,23 @@ const updateTeam = async (teamId, updateData) => {
     }
   }
 
+  // NOTE: leader changes should use assignTeamLead to keep membership/managerId consistent.
+  // We still accept leaderId here for backward compatibility.
   if (leaderId) {
-    const leader = await User.findById(leaderId);
-    if (!leader) {
-      throw new Error("Team leader not found");
-    }
-
-    const team = await Team.findById(teamId);
-    if (!team.memberIds.includes(leaderId)) {
-      team.memberIds.push(leaderId);
-    }
+    await assignTeamLead(teamId, leaderId);
   }
 
-  const team = await Team.findByIdAndUpdate(
+  const updated = await Team.findByIdAndUpdate(
     teamId,
     {
-      ...(name && { name }),
-      ...(description && { description }),
-      ...(leaderId && { leaderId }),
+      ...(name !== undefined && name !== null && { name }),
+      ...(description !== undefined && description !== null && { description }),
       updatedAt: new Date(),
     },
     { new: true, runValidators: true }
-  )
-    .populate("leaderId", "profile.fullName email")
-    .populate("memberIds", "profile.fullName email");
+  );
 
-  return team;
+  return populateTeam(updated._id);
 };
 
 /**
@@ -141,8 +165,11 @@ const deleteTeam = async (teamId) => {
     throw new Error("Cannot delete team with active tasks");
   }
 
-  // Remove teamId from all members
-  await User.updateMany({ teamId }, { $unset: { teamId: 1 } });
+  // Remove teamId/managerId from all members
+  await User.updateMany(
+    { teamId },
+    { $unset: { teamId: 1, managerId: 1 } }
+  );
 
   // Delete team
   return await Team.findByIdAndDelete(teamId);
@@ -166,6 +193,21 @@ const addMember = async (teamId, userId) => {
     throw new Error("User not found");
   }
 
+  if (user.teamId && user.teamId.toString() !== teamId.toString()) {
+    throw new Error("This user already belongs to another team");
+  }
+
+  // Prevent a team lead who already leads another team from joining a different team
+  if (user.role === "team_lead") {
+    const leadingAnotherTeam = await Team.findOne({
+      leaderId: userId,
+      _id: { $ne: teamId },
+    }).select("_id");
+    if (leadingAnotherTeam) {
+      throw new Error("This team lead is already leading another team");
+    }
+  }
+
   if (team.memberIds.includes(userId)) {
     throw new Error("User already in this team");
   }
@@ -173,13 +215,13 @@ const addMember = async (teamId, userId) => {
   team.memberIds.push(userId);
   await team.save();
 
-  await User.findByIdAndUpdate(userId, { teamId }, { new: true });
+  await User.findByIdAndUpdate(
+    userId,
+    { teamId, managerId: team.leaderId },
+    { new: true }
+  );
 
-  const populatedTeam = await Team.findById(team._id)
-    .populate("leaderId", "profile.fullName email")
-    .populate("memberIds", "profile.fullName email role");
-
-  return populatedTeam;
+  return populateTeam(team._id);
 };
 
 /**
@@ -204,11 +246,9 @@ const removeMember = async (teamId, userId) => {
   team.memberIds = team.memberIds.filter((id) => id.toString() !== userId);
   await team.save();
 
-  await User.findByIdAndUpdate(userId, { $unset: { teamId: 1 } });
+  await User.findByIdAndUpdate(userId, { $unset: { teamId: 1, managerId: 1 } });
 
-  return Team.findById(team._id)
-    .populate("leaderId", "profile.fullName email")
-    .populate("memberIds", "profile.fullName email role");
+  return populateTeam(team._id);
 };
 
 /**
@@ -223,43 +263,71 @@ const assignTeamLead = async (teamId, newLeaderId) => {
     throw new Error("Team not found");
   }
 
-  const newLeader = await User.findById(newLeaderId);
-  if (!newLeader) {
-    throw new Error("New team leader not found");
+  const newLeader = await ensureLeaderEligible(newLeaderId, teamId);
+
+  if (newLeader.teamId && newLeader.teamId.toString() !== teamId.toString()) {
+    throw new Error("This user already belongs to another team");
   }
 
-  // Check if newLeader is already in team
-  if (!team.memberIds.includes(newLeaderId)) {
+  const currentLeaderId = team.leaderId?.toString();
+  const isSameLeader = currentLeaderId === newLeaderId.toString();
+
+  // Leader swap rules:
+  // - new leader is auto-added to members
+  // - old leader is auto-removed from members
+  // - members managerId is updated to new leader
+  if (!team.memberIds.some((id) => id.toString() === newLeaderId.toString())) {
     team.memberIds.push(newLeaderId);
   }
 
-  // Get current leader ID
-  const currentLeaderId = team.leaderId.toString();
-
-  // Update roles
-  // 1. Change current leader to employee
-  if (currentLeaderId !== newLeaderId) {
-    await User.findByIdAndUpdate(
-      currentLeaderId,
-      { role: "employee" },
-      { new: true }
+  if (!isSameLeader && currentLeaderId) {
+    team.memberIds = team.memberIds.filter(
+      (id) => id.toString() !== currentLeaderId
     );
   }
 
-  // 2. Change new leader to team_lead
-  await User.findByIdAndUpdate(
-    newLeaderId,
-    { role: "team_lead" },
-    { new: true }
-  );
-
-  // 3. Update team
   team.leaderId = newLeaderId;
   await team.save();
 
-  return await Team.findById(team._id)
-    .populate("leaderId", "profile.fullName email role")
-    .populate("memberIds", "profile.fullName email role");
+  // Update old leader to no-team (do not mutate role)
+  if (!isSameLeader && currentLeaderId) {
+    await User.findByIdAndUpdate(currentLeaderId, {
+      $unset: { teamId: 1, managerId: 1 },
+    });
+  }
+
+  // New leader belongs to this team; no manager
+  await User.findByIdAndUpdate(newLeaderId, { teamId, managerId: null });
+
+  // All other members belong to this team; manager is new leader
+  await User.updateMany(
+    { _id: { $in: team.memberIds.filter((id) => id.toString() !== newLeaderId.toString()) } },
+    { teamId, managerId: newLeaderId }
+  );
+
+  return populateTeam(team._id);
+};
+
+/**
+ * Get available team leaders (team_lead), with status if already leading another team.
+ * @param {String|null} excludeTeamId
+ */
+const getAvailableLeaders = async (excludeTeamId = null) => {
+  const leaders = await User.find({ isActive: true, role: "team_lead" })
+    .select("_id email role profile teamId managerId")
+    .populate("teamId", "name");
+
+  const leadingTeams = await Team.find({
+    leaderId: { $in: leaders.map((u) => u._id) },
+    ...(excludeTeamId ? { _id: { $ne: excludeTeamId } } : {}),
+  }).select("leaderId");
+
+  const leadingSet = new Set(leadingTeams.map((t) => t.leaderId.toString()));
+
+  return leaders.map((u) => ({
+    ...u.toObject(),
+    isLeadingAnotherTeam: leadingSet.has(u._id.toString()),
+  }));
 };
 
 /**
@@ -289,6 +357,7 @@ module.exports = {
   addMember,
   removeMember,
   assignTeamLead,
+  getAvailableLeaders,
   getTeamMembers,
   getAllMembers
 };
