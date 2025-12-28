@@ -194,6 +194,50 @@ const getLeaveById = async (req, res) => {
 };
 
 /**
+ * @desc    Get leave statistics (count by status)
+ * @route   GET /api/leaves/statistics
+ * @access  Private (Team Lead, HR Manager)
+ */
+const getLeaveStatistics = async (req, res) => {
+    try {
+        let query = {};
+
+        // Team lead sees only their team's leaves
+        if (req.user.role === 'team_lead') {
+            const teamMembers = await User.find({ 
+                teamId: req.user.teamId 
+            }).select('_id');
+            
+            const memberIds = teamMembers.map(m => m._id);
+            query.userId = { $in: memberIds };
+        }
+
+        // Get all leaves and count by status
+        const leaves = await Leave.find(query)
+            .populate('userId', 'email profile teamId')
+            .sort({ createdAt: -1 });
+
+        const stats = {
+            pending: leaves.filter(l => l.status === 'pending').length,
+            approved: leaves.filter(l => l.status === 'approved').length,
+            rejected: leaves.filter(l => l.status === 'rejected').length,
+            total: leaves.length
+        };
+
+        res.json({
+            success: true,
+            data: leaves,
+            stats: stats
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+};
+
+/**
  * @desc    Get pending leave requests for approval
  * @route   GET /api/leaves/pending
  * @access  Private (Team Lead, HR Manager)
@@ -484,6 +528,7 @@ module.exports = {
     getAllLeaves,
     getLeaveById,
     getPendingLeaves,
+    getLeaveStatistics,
     approveLeave,
     rejectLeave,
     cancelLeave,

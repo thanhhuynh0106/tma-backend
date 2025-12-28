@@ -200,10 +200,10 @@ const getAllTasks = async (req, res) => {
 const getTaskById = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
-      .populate('assignedBy', 'profile.fullName email avatar')
-      .populate('assignedTo', 'profile.fullName email avatar')
+      .populate('assignedBy', 'profile.fullName profile.position email avatar')
+      .populate('assignedTo', 'profile.fullName profile.position email avatar')
       .populate('teamId', 'name')
-      .populate('comments.userId', 'profile.fullName avatar email');
+      .populate('comments.userId', 'profile.fullName profile.position avatar email');
 
     if (!task || task.status === 'deleted') {
       return res.status(404).json({
@@ -616,7 +616,7 @@ const addComment = async (req, res) => {
     await task.save();
     await notifyCommentAdded(task, req.user._id);
 
-    await task.populate('comments.userId', 'profile.fullName avatar email profile.position');
+    await task.populate('comments.userId', 'profile.fullName profile.position avatar email role');
 
     res.json({
       success: true,

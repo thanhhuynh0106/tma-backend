@@ -6,6 +6,7 @@ const {
     getAllLeaves,
     getLeaveById,
     getPendingLeaves,
+    getLeaveStatistics,
     approveLeave,
     rejectLeave,
     cancelLeave,
@@ -22,6 +23,9 @@ router.get('/balance', getLeaveBalance);
 
 // My leaves
 router.get('/my', getMyLeaves);
+
+// Leave statistics (for dashboard)
+router.get('/statistics', authorize('team_lead', 'hr_manager'), getLeaveStatistics);
 
 // Pending leaves (for approval)
 router.get('/pending', authorize('team_lead', 'hr_manager'), getPendingLeaves);
