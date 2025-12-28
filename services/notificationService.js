@@ -63,8 +63,8 @@ const createBulkNotifications = async (userIds, type, title, message, relatedId 
  */
 const notifyTaskAssigned = async (task, userId) => {
   try {
-    const title = 'Task Assigned';
-    const message = `You have been assigned to task: "${task.title}"`;
+    const title = 'Task assigned';
+    const message = `You have been assigned to task: "${task.title}", please check it out.`;
     
     await createNotification(
       userId,
@@ -85,12 +85,11 @@ const notifyTaskAssigned = async (task, userId) => {
  */
 const notifyTaskUpdated = async (task, updaterId) => {
   try {
-    const title = 'Task Updated';
+    const title = 'Task updated';
     
-    // Tạo message chi tiết hơn
     const user = await User.findById(updaterId).select('profile.fullName'); 
     const updaterName = user?.profile?.fullName || 'A user';
-    const message = `Task "${task.title}" was updated by ${updaterName}. Priority: ${task.priority.toUpperCase()}, Status: ${task.status.toUpperCase()}`;
+    const message = `Task "${task.title}" was updated by ${updaterName}. Please check the details.`;
 
     // Notify all assigned users except the updater
     const userIds = task.assignedTo
@@ -129,7 +128,7 @@ const notifyTaskUpdated = async (task, updaterId) => {
  */
 const notifyCommentAdded = async (task, commenterId) => {
   try {
-    const title = 'New Comment';
+    const title = 'New comment';
     const message = `A new comment was added to "${task.title}"`;
 
     // Notify all assigned users and creator except commenter
@@ -156,6 +155,48 @@ const notifyCommentAdded = async (task, commenterId) => {
 };
 
 /**
+ * Notify when task is completed
+ * @param {Object} task - Task document
+ * @param {String} completerId - User ID who completed the task
+ */
+const notifyTaskCompleted = async (task, completerId) => {
+  try {
+    const title = 'Task completed';
+    const user = await User.findById(completerId).select('profile.fullName');
+    const completerName = user?.profile?.fullName || 'A team member';
+    const message = `Task "${task.title}" has been marked as completed by ${completerName}`;
+
+    // Notify all assigned users except the completer
+    const userIds = task.assignedTo
+      .map(id => id.toString())
+      .filter(id => id !== completerId.toString());
+
+    if (userIds.length > 0) {
+      await createBulkNotifications(
+        userIds,
+        'task_completed',
+        title,
+        message,
+        task._id
+      );
+    }
+
+    // Always notify task creator if not the completer
+    if (task.assignedBy.toString() !== completerId.toString()) {
+      await createNotification(
+        task.assignedBy,
+        'task_completed',
+        title,
+        message,
+        task._id
+      );
+    }
+  } catch (error) {
+    console.error('Notify task completed error:', error);
+  }
+};
+
+/**
  * Notify when deadline is approaching
  * @param {Object} task - Task document
  */
@@ -172,8 +213,8 @@ const notifyDeadlineApproaching = async (task) => {
 
     // Notify if deadline is within 24 hours
     if (hoursToDeadline <= 24 && hoursToDeadline > 0) {
-      const title = 'Deadline Approaching';
-      const message = `Task "${task.title}" is due soon`;
+      const title = 'Deadline approaching';
+      const message = `Task "${task.title}" is due soon, please ensure to complete it on time.`;
 
       const userIds = task.assignedTo.map(id => id.toString());
 
@@ -197,8 +238,8 @@ const notifyDeadlineApproaching = async (task) => {
  */
 const notifyLeaveApproved = async (leave, userId) => {
   try {
-    const title = 'Leave Approved';
-    const message = `Your leave request has been approved`;
+    const title = 'Leave approved';
+    const message = `Your leave request has been approved, enjoy your time off!`;
 
     await createNotification(
       userId,
@@ -220,7 +261,7 @@ const notifyLeaveApproved = async (leave, userId) => {
 const notifyLeaveRejected = async (leave, userId) => {
   try {
     const title = 'Leave Rejected';
-    const message = `Your leave request has been rejected`;
+    const message = `Your leave request has been rejected. Please contact HR for more details.`;
 
     await createNotification(
       userId,
@@ -231,6 +272,51 @@ const notifyLeaveRejected = async (leave, userId) => {
     );
   } catch (error) {
     console.error('Notify leave rejected error:', error);
+  }
+};
+
+/**
+ * Notify HR Manager and Team Lead when new leave is pending
+ * @param {Object} leave - Leave document with populated userId
+ */
+const notifyPendingLeave = async (leave) => {
+  try {
+    const employee = await User.findById(leave.userId).select('profile.fullName email teamId');
+    if (!employee) return;
+
+    const title = 'New Leave Request';
+    const message = `${employee.profile?.fullName || employee.email} has submitted a new leave request for ${leave.numberOfDays} day(s)`;
+
+    // Notify HR Managers
+    const hrManagers = await User.find({ role: 'hr_manager' }).select('_id');
+    const hrIds = hrManagers.map(hr => hr._id);
+
+    // Notify Team Lead of employee's team
+    if (employee.teamId) {
+      const teamLead = await User.findOne({ 
+        role: 'team_lead', 
+        teamId: employee.teamId 
+      }).select('_id');
+      
+      if (teamLead) {
+        hrIds.push(teamLead._id);
+      }
+    }
+
+    // Remove duplicates
+    const uniqueIds = [...new Set(hrIds.map(id => id.toString()))];
+
+    if (uniqueIds.length > 0) {
+      await createBulkNotifications(
+        uniqueIds,
+        'leave_pending',
+        title,
+        message,
+        leave._id
+      );
+    }
+  } catch (error) {
+    console.error('Notify pending leave error:', error);
   }
 };
 
@@ -319,15 +405,19 @@ const deleteAllNotifications = async (userId) => {
   }
 };
 
+
+
 module.exports = {
   createNotification,
   createBulkNotifications,
   notifyTaskAssigned,
   notifyTaskUpdated,
+  notifyTaskCompleted,
   notifyCommentAdded,
   notifyDeadlineApproaching,
   notifyLeaveApproved,
   notifyLeaveRejected,
+  notifyPendingLeave,
   markAsRead,
   markAllAsRead,
   getUnreadCount,

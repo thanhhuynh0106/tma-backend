@@ -13,6 +13,7 @@ const {
 const {
   notifyTaskAssigned,
   notifyTaskUpdated,
+  notifyTaskCompleted,
   notifyCommentAdded
 } = require('../services/notificationService');
 const { getFileUrl, deleteFile, getOriginalFilename } = require('../middleware/upload');
@@ -127,7 +128,7 @@ const createTask = async (req, res) => {
  */
 const getAllTasks = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, priority, teamId, search } = req.query;
+    const { page = 1, limit = 100, status, priority, teamId, search } = req.query;
     const query = { status: { $ne: 'deleted' } };
 
     // Only HR Manager and Team Lead can view all tasks
@@ -430,7 +431,14 @@ const updateTaskStatus = async (req, res) => {
     task.status = status;
     await task.save();
 
+    // Notify about task update
     await notifyTaskUpdated(task, req.user._id);
+    
+    // If task is completed, send special notification
+    if (status === 'done') {
+      await notifyTaskCompleted(task, req.user._id);
+    }
+
     await task.populate('assignedBy assignedTo teamId');
 
     res.json({
@@ -500,7 +508,7 @@ const updateTaskProgress = async (req, res) => {
  */
 const getMyTasks = async (req, res) => {
   try {
-    const { page = 1, limit = 10, status, priority } = req.query;
+    const { page = 1, limit = 1000, status, priority } = req.query;
     const query = {
       assignedTo: req.user._id,
       status: { $ne: 'deleted' }

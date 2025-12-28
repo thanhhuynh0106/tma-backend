@@ -48,6 +48,41 @@ const getTodayAttendance = async (userId) => {
 
 
 /**
+ * Check if a date is a working day (Monday-Friday, excluding holidays)
+ * @param {Date} date
+ * @returns {Boolean}
+ */
+const isWorkingDay = (date) => {
+    const day = date.getDay();
+    // 0 = Sunday, 6 = Saturday
+    return day !== 0 && day !== 6;
+}
+
+/**
+ * Get all working days between two dates
+ * @param {Date} startDate
+ * @param {Date} endDate
+ * @returns {Array} Array of Date objects
+ */
+const getWorkingDays = (startDate, endDate) => {
+    const workingDays = [];
+    const current = new Date(startDate);
+    current.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    
+    while (current <= end) {
+        if (isWorkingDay(current)) {
+            workingDays.push(new Date(current));
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    
+    return workingDays;
+}
+
+/**
  * Get attendance statistics for a user over a date range
  * @param {String} userId
  * @param {Date} startDate
@@ -56,6 +91,7 @@ const getTodayAttendance = async (userId) => {
  */
 const getAttendanceStats = async (userId, startDate, endDate) => {
     const query = { userId };
+    let workingDaysCount = 0;
     
     // Only add date filter if dates are provided and valid
     if (startDate && endDate) {
@@ -64,21 +100,26 @@ const getAttendanceStats = async (userId, startDate, endDate) => {
         
         if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
             query.date = { $gte: start, $lte: end };
+            // Calculate working days in range
+            const workingDays = getWorkingDays(start, end);
+            workingDaysCount = workingDays.length;
         }
     }
     
     const records = await Attendance.find(query);
 
-    const totalDays = records.length;
+    const totalRecords = records.length;
     const presentDays = records.filter(r => r.status === 'present').length;
     const lateDays = records.filter(r => r.status === 'late').length;
-    const absentDays = records.filter(r => r.status === 'absent').length;
+    
+    // Calculate absent days: working days - total records
+    const absentDays = workingDaysCount > 0 ? Math.max(0, workingDaysCount - totalRecords) : 0;
     
     const totalWorkHours = records.reduce((sum, r) => sum + (r.workHours || 0), 0);
-    const averageWorkHours = totalDays > 0 ? totalWorkHours / totalDays : 0;
+    const averageWorkHours = totalRecords > 0 ? totalWorkHours / totalRecords : 0;
 
     return {
-        totalDays,
+        totalDays: workingDaysCount || totalRecords,
         presentDays,
         lateDays,
         absentDays,
@@ -87,6 +128,36 @@ const getAttendanceStats = async (userId, startDate, endDate) => {
     };
 }
 
+
+/**
+ * Auto clock-out for incomplete past attendance records
+ * @param {Object} record - Attendance record
+ * @returns {Object} Updated record
+ */
+const autoClockOutIfNeeded = (record) => {
+    // Only process if no clock-out
+    if (record.clockOut) {
+        return record;
+    }
+    
+    const recordDate = new Date(record.date);
+    recordDate.setHours(23, 59, 59, 999);
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // If record is from past (not today), auto clock-out at 6 PM
+    if (recordDate < today) {
+        const autoClockOutTime = new Date(record.date);
+        autoClockOutTime.setHours(18, 0, 0, 0); // 6:00 PM
+        
+        record.clockOut = autoClockOutTime;
+        record.workHours = calculateWorkHours(record.clockIn, autoClockOutTime);
+        record.autoClockOut = true; // Flag to indicate auto clock-out
+    }
+    
+    return record;
+}
 
 /**
  * Validate if location is within allowed area
@@ -115,5 +186,8 @@ module.exports = {
     determineStatus,
     getTodayAttendance,
     getAttendanceStats,
-    validateLocation
+    validateLocation,
+    isWorkingDay,
+    getWorkingDays,
+    autoClockOutIfNeeded
 };

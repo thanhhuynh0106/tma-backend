@@ -1,6 +1,11 @@
 const Leave = require('../models/Leave');
 const User = require('../models/User');
 const leaveService = require('../services/leaveService');
+const { 
+  notifyLeaveApproved, 
+  notifyLeaveRejected,
+  notifyPendingLeave 
+} = require('../services/notificationService');
 
 /**
  * @desc    Submit leave request
@@ -43,6 +48,9 @@ const submitLeave = async (req, res) => {
         });
 
         await leave.populate('userId', 'email profile');
+
+        // Notify HR and Team Lead about new pending leave
+        await notifyPendingLeave(leave);
 
         res.status(201).json({
             success: true,
@@ -318,6 +326,9 @@ const approveLeave = async (req, res) => {
 
         await leave.populate('approvedBy', 'email profile');
 
+        // Notify employee about approval
+        await notifyLeaveApproved(leave, leave.userId._id);
+
         res.json({
             success: true,
             message: 'Leave request approved successfully',
@@ -371,6 +382,9 @@ const rejectLeave = async (req, res) => {
         await leave.save();
 
         await leave.populate('approvedBy', 'email profile');
+
+        // Notify employee about rejection
+        await notifyLeaveRejected(leave, leave.userId._id);
 
         res.json({
             success: true,

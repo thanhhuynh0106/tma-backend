@@ -37,6 +37,23 @@ const clockIn = async (req, res) => {
         }
 
         const clockInTime = new Date();
+        const currentHour = clockInTime.getHours();
+        
+        // Check if before 6 AM (06:00) or after 6 PM (18:00)
+        if (currentHour < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Clock-in is not allowed before 6:00 AM. Office hours are from 6:00 AM to 6:00 PM.'
+            });
+        }
+        
+        if (currentHour >= 18) {
+            return res.status(400).json({
+                success: false,
+                message: 'Clock-in is not allowed after 6:00 PM. Please contact HR if you need to record attendance for today.'
+            });
+        }
+
         const status = attendanceService.determineStatus(clockInTime);
         const attendanceRecord = new Attendance({
             userId,
@@ -111,7 +128,7 @@ const clockOut = async (req, res) => {
 
 
 /**
- * @desc    Get current user's attendance records
+ * @desc    Get current user's attendance records (with calculated absent days)
  * @route   GET /api/attendance/my
  * @access  Private
  */
@@ -120,6 +137,7 @@ const getMyAttendance = async (req, res) => {
         const userId = req.user._id;
         const { startDate, endDate } = req.query;
         const query = { userId };
+        let finalRecords = [];
         
         if (startDate && endDate) {
             const start = new Date(startDate);
@@ -130,13 +148,78 @@ const getMyAttendance = async (req, res) => {
                     $gte: start,  
                     $lte: end     
                 };
+                
+                // Get actual attendance records
+                let records = await Attendance.find(query).sort({ date: -1 });
+                
+                // Auto clock-out for incomplete past records
+                const recordsToUpdate = [];
+                records = records.map(record => {
+                    const originalClockOut = record.clockOut;
+                    const updatedRecord = attendanceService.autoClockOutIfNeeded(record);
+                    
+                    // If auto clock-out was applied, save to DB
+                    if (!originalClockOut && updatedRecord.clockOut && updatedRecord.autoClockOut) {
+                        recordsToUpdate.push(record);
+                    }
+                    
+                    return updatedRecord;
+                });
+                
+                // Save updated records to DB
+                if (recordsToUpdate.length > 0) {
+                    await Promise.all(recordsToUpdate.map(r => r.save()));
+                }
+                
+                // Get all working days in range
+                const workingDays = attendanceService.getWorkingDays(start, end);
+                
+                // Create a map of existing records by date
+                const recordMap = new Map();
+                records.forEach(record => {
+                    const dateKey = new Date(record.date).toDateString();
+                    recordMap.set(dateKey, record);
+                });
+                
+                // Get today's date for comparison
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                // Fill in absent records for missing working days (excluding today)
+                workingDays.forEach(day => {
+                    const dateKey = day.toDateString();
+                    const dayDate = new Date(day);
+                    dayDate.setHours(0, 0, 0, 0);
+                    
+                    if (recordMap.has(dateKey)) {
+                        finalRecords.push(recordMap.get(dateKey));
+                    } else if (dayDate < today) {
+                        // Only create absent record for past days, not today
+                        finalRecords.push({
+                            _id: `absent_${day.getTime()}`,
+                            userId,
+                            date: day,
+                            status: 'absent',
+                            workHours: 0,
+                            isCalculated: true // Flag to indicate this is a calculated record
+                        });
+                    }
+                });
+                
+                // Sort by date descending
+                finalRecords.sort((a, b) => new Date(b.date) - new Date(a.date));
+            } else {
+                // If no date range, just return actual records
+                finalRecords = await Attendance.find(query).sort({ date: -1 });
             }
+        } else {
+            // If no date range, just return actual records
+            finalRecords = await Attendance.find(query).sort({ date: -1 });
         }
 
-        const records = await Attendance.find(query).sort({ date: -1 });
         res.status(200).json({
             success: true,
-            data: records
+            data: finalRecords
         });
 
     } catch (error) {

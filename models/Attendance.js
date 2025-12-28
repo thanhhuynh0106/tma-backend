@@ -10,7 +10,8 @@ const AttendanceSchema = new mongoose.Schema({
         lng: { type: Number, required: true }
     },
     status: { type: String, enum: ['present', 'late', 'absent'], required: true },
-    workHours: { type: Number }
+    workHours: { type: Number },
+    autoClockOut: { type: Boolean, default: false }
 }, { timestamps: true, collection: 'attendances' });
 
 
