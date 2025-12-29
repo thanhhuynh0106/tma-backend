@@ -942,8 +942,16 @@ const toggleSubtask = async (req, res) => {
       });
     }
 
-    // Toggle completion status
-    subtask.isCompleted = !subtask.isCompleted;
+    // Check if already completed - prevent unchecking
+    if (subtask.isCompleted) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Cannot uncheck a completed subtask' 
+      });
+    }
+
+    // Mark as completed (only allow false -> true)
+    subtask.isCompleted = true;
     subtask.updatedAt = new Date();
 
     await task.save(); // This will trigger progress recalculation
