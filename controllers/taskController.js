@@ -163,8 +163,8 @@ const getAllTasks = async (req, res) => {
     const total = await Task.countDocuments(query);
 
     const tasks = await Task.find(query)
-      .populate('assignedBy', 'profile.fullName email avatar')
-      .populate('assignedTo', 'profile.fullName email avatar')
+      .populate('assignedBy', 'profile.fullName profile.position profile.avatar email')
+      .populate('assignedTo', 'profile.fullName profile.position profile.avatar email')
       .populate('teamId', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -201,10 +201,10 @@ const getAllTasks = async (req, res) => {
 const getTaskById = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id)
-      .populate('assignedBy', 'profile.fullName profile.position email avatar')
-      .populate('assignedTo', 'profile.fullName profile.position email avatar')
+      .populate('assignedBy', 'profile.fullName profile.position profile.avatar email')
+      .populate('assignedTo', 'profile.fullName profile.position profile.avatar email')
       .populate('teamId', 'name')
-      .populate('comments.userId', 'profile.fullName profile.position avatar email');
+      .populate('comments.userId', 'profile.fullName profile.position profile.avatar email');
 
     if (!task || task.status === 'deleted') {
       return res.status(404).json({
@@ -521,7 +521,9 @@ const getMyTasks = async (req, res) => {
     const total = await Task.countDocuments(query);
 
     const tasks = await Task.find(query)
-      .populate('assignedBy assignedTo teamId', 'profile.fullName email name')
+      .populate('assignedBy', 'profile.fullName profile.position profile.avatar email')
+      .populate('assignedTo', 'profile.fullName profile.position profile.avatar email')
+      .populate('teamId', 'name')
       .sort({ dueDate: 1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -568,7 +570,9 @@ const getTeamTasks = async (req, res) => {
     const total = await Task.countDocuments(query);
 
     const tasks = await Task.find(query)
-      .populate('assignedBy assignedTo teamId', 'profile.fullName email name')
+      .populate('assignedBy', 'profile.fullName profile.position profile.avatar email')
+      .populate('assignedTo', 'profile.fullName profile.position profile.avatar email')
+      .populate('teamId', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -624,7 +628,13 @@ const addComment = async (req, res) => {
     await task.save();
     await notifyCommentAdded(task, req.user._id);
 
-    await task.populate('comments.userId', 'profile.fullName profile.position avatar email role');
+    // Populate all necessary fields like getTaskById
+    await task.populate([
+      { path: 'assignedBy', select: 'profile.fullName profile.position profile.avatar email' },
+      { path: 'assignedTo', select: 'profile.fullName profile.position profile.avatar email' },
+      { path: 'teamId', select: 'name' },
+      { path: 'comments.userId', select: 'profile.fullName profile.position profile.avatar email role' }
+    ]);
 
     res.json({
       success: true,
@@ -939,8 +949,8 @@ const toggleSubtask = async (req, res) => {
     await task.save(); // This will trigger progress recalculation
 
     await task.populate([
-      { path: 'assignedBy', select: 'profile.fullName email' },
-      { path: 'assignedTo', select: 'profile.fullName email' },
+      { path: 'assignedBy', select: 'profile.fullName profile.position profile.avatar email' },
+      { path: 'assignedTo', select: 'profile.fullName profile.position profile.avatar email' },
       { path: 'teamId', select: 'name' }
     ]);
 
